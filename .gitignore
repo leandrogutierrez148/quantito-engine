@@ -1,0 +1,8 @@
+config.toml
+.vscode/
+.code-workspace
+apidoc/
+dist/
+*.DS_Store
+__debug_bin*
+internal/interfaces/mocks/**

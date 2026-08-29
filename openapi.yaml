@@ -1,0 +1,108 @@
+openapi: 3.0.2
+info:
+  title: quantito-engine API
+  description: |
+    REST API documentation for the Quantito Engine service.
+  version: 1.0.0
+tags:
+  - name: base
+    description: Base and health check endpoints.
+  - name: execution
+    description: Engine execution endpoints.
+
+paths:
+  /ping:
+    get:
+      summary: Ping
+      description: Service health check.
+      tags:
+        - base
+      responses:
+        "200":
+          description: OK
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: pong
+
+  /execute/{assetId}:
+    post:
+      summary: Execute engine for an asset
+      description: |
+        Retrieves all active quantitative experiments, evaluates corresponding strategy rules for the asset, and executes associated actions/signals.
+      tags:
+        - execution
+      parameters:
+        - name: assetId
+          in: path
+          description: Asset ID (or numeric symbol identifier).
+          required: true
+          schema:
+            type: integer
+            example: 101
+      responses:
+        "200":
+          description: OK
+        "422":
+          description: An error occurred while processing the request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Error executing strategy engine"
+
+  /execute-batch:
+    post:
+      summary: Execute engine for a batch of assets
+      description: |
+        Retrieves all active quantitative experiments, evaluates corresponding strategy rules for each asset in the batch, and executes associated actions/signals.
+      tags:
+        - execution
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                assets:
+                  type: array
+                  description: List of asset IDs to process
+                  items:
+                    type: integer
+                    example: 101
+                users:
+                  type: array
+                  description: Backward compatible list of IDs
+                  items:
+                    type: integer
+                    example: 101
+              example:
+                assets: [101, 102, 103]
+      responses:
+        "200":
+          description: OK
+        "422":
+          description: An error occurred while processing the request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  errors:
+                    type: array
+                    description: List of errors for each failed asset
+                    items:
+                      type: object
+                      properties:
+                        assetId:
+                          type: integer
+                          description: Asset ID
+                          example: 101
+                        error:
+                          type: string
+                          example: "Error executing action"

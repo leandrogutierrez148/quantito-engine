@@ -1,0 +1,249 @@
+classDiagram
+    direction TB
+
+    %% ==========================================
+    %% LAYER: CONTROLLERS & SERVICES
+    %% ==========================================
+    class ExecutionController {
+        -service IExecutionService
+        +Execute(c echo.Context) error
+    }
+
+    class IExecutionService {
+        <<interface>>
+        +Execute(id int) error
+    }
+
+    class ExecutionService {
+        -experimentsRepo IExperimentsRepository
+        -assetVariantsRepo IAssetVariantsRepository
+        -strategyFactory IStrategyFactory
+        -signalDispatcher ISignalDispatcher
+        -executionMutex IExecutionMutex
+        +Execute(id int) error
+        -executeExperiment(experiment *Experiment) error
+        -evaluateAssetAcrossVariants(assetID int, experimentID int, variants []*Variant) error
+        -executeVariant(assetID int, experimentID int, variant *Variant) error
+    }
+
+    ExecutionController --> IExecutionService
+    IExecutionService <|.. ExecutionService
+
+    %% ==========================================
+    %% LAYER: STRATEGIES & FACTORY
+    %% ==========================================
+    class IStrategyFactory {
+        <<interface>>
+        +CreateStrategy(strategyClass string) IStrategy, error
+    }
+
+    class StrategyFactory {
+        +CreateStrategy(strategyClass string) IStrategy, error
+    }
+
+    class IStrategy {
+        <<interface>>
+        +GenerateSignal(assetID int, params map[string]any) *Signal, error
+    }
+
+    class FiftyDayAvgStrategy {
+        +GenerateSignal(assetID int, params map[string]any) *Signal, error
+    }
+
+    class PriceMomentumStrategy {
+        +GenerateSignal(assetID int, params map[string]any) *Signal, error
+    }
+
+    ExecutionService --> IStrategyFactory
+    IStrategyFactory <|.. StrategyFactory
+    StrategyFactory ..> IStrategy
+    IStrategy <|.. FiftyDayAvgStrategy
+    IStrategy <|.. PriceMomentumStrategy
+
+    %% ==========================================
+    %% LAYER: SIGNAL SINKS & DISPATCHER
+    %% ==========================================
+    class ISignalDispatcher {
+        <<interface>>
+        +RegisterSink(sink ISignalSink)
+        +Dispatch(signal *Signal) error
+    }
+
+    class SignalDispatcher {
+        -sinks []ISignalSink
+        +RegisterSink(sink ISignalSink)
+        +Dispatch(signal *Signal) error
+    }
+
+    class ISignalSink {
+        <<interface>>
+        +Name() string
+        +Send(signal *Signal) error
+    }
+
+    class ConsoleSink {
+        +Name() string
+        +Send(signal *Signal) error
+    }
+
+    ExecutionService --> ISignalDispatcher
+    ISignalDispatcher <|.. SignalDispatcher
+    SignalDispatcher o-- ISignalSink
+    ISignalSink <|.. ConsoleSink
+
+    %% ==========================================
+    %% LAYER: REPOSITORIES & INFRASTRUCTURE
+    %% ==========================================
+    class IExperimentsRepository {
+        <<interface>>
+        +Find(includeInactive bool) []*Experiment, error
+        +FindByID(experimentID int) *Experiment, error
+        +FindByExperiment(experiment string) *Experiment, error
+    }
+    class ExperimentsRepository {
+        -db IDBHandler
+        +Find(includeInactive bool) []*Experiment, error
+        +FindByID(experimentID int) *Experiment, error
+        +FindByExperiment(experiment string) *Experiment, error
+    }
+
+    class IExperimentAssetsRepository {
+        <<interface>>
+        +FindByExperiment(experimentID int) []*ExperimentAsset, error
+        +FindExperimentsByAsset(assetID int) []*Experiment, error
+    }
+    class ExperimentAssetsRepository {
+        -db IDBHandler
+        +FindByExperiment(experimentID int) []*ExperimentAsset, error
+        +FindExperimentsByAsset(assetID int) []*Experiment, error
+    }
+
+    class IVariantsRepository {
+        <<interface>>
+        +FindByExperiment(experimentID int) []*Variant, error
+    }
+    class VariantsRepository {
+        -db IDBHandler
+        +FindByExperiment(experimentID int) []*Variant, error
+    }
+
+    class IAssetVariantsRepository {
+        <<interface>>
+        +Save(assetID int, variantID int, signal *Signal) *AssetVariant, error
+        +Find(assetID int, fromDate Nullable~Time~, toDate Nullable~Time~) []*AssetVariant, error
+    }
+    class AssetVariantsRepository {
+        -db IDBHandler
+        +Save(assetID int, variantID int, signal *Signal) *AssetVariant, error
+        +Find(assetID int, fromDate Nullable~Time~, toDate Nullable~Time~) []*AssetVariant, error
+    }
+
+    class IExecutionMutex {
+        <<interface>>
+        +Lock(experimentID int, variantID int, assetID int)
+        +Unlock(experimentID int, variantID int, assetID int)
+    }
+    class ExecutionMutex {
+        -mutex IKeyMutex
+        +Lock(experimentID int, variantID int, assetID int)
+        +Unlock(experimentID int, variantID int, assetID int)
+    }
+
+    class IDBHandler {
+        <<interface>>
+        +QueryScalar(query string, dest any, params ...any) error
+        +QueryOne(query string, dest any, params ...any) error
+        +QueryAll(query string, dest any, params ...any) error
+        +QueryJson(query string, obj any) []byte, error
+    }
+
+    ExecutionService --> IExperimentsRepository
+    ExecutionService --> IAssetVariantsRepository
+    ExecutionService --> IExecutionMutex
+
+    IExperimentsRepository <|.. ExperimentsRepository
+    IExperimentAssetsRepository <|.. ExperimentAssetsRepository
+    IVariantsRepository <|.. VariantsRepository
+    IAssetVariantsRepository <|.. AssetVariantsRepository
+    IExecutionMutex <|.. ExecutionMutex
+
+    ExperimentsRepository --> IDBHandler
+    ExperimentAssetsRepository --> IDBHandler
+    VariantsRepository --> IDBHandler
+    AssetVariantsRepository --> IDBHandler
+
+    %% ==========================================
+    %% LAYER: DOMAIN MODELS
+    %% ==========================================
+    class Experiment {
+        +int ID
+        +string Experiment
+        +Nullable~string~ Description
+        +JSONColumn Params
+        +string Status
+        +Nullable~string~ Notes
+        +ExperimentAsset[] Assets
+        +Variant[] Variants
+        +IsActive() bool
+        +GetParam(key string) (any, bool)
+    }
+
+    class ExperimentAsset {
+        +int ID
+        +int ExperimentID
+        +int AssetID
+        +string Status
+        +time.Time CreatedAt
+    }
+
+    class Strategy {
+        +int ID
+        +string Name
+        +string Class
+        +JSONColumn Params
+        +string Status
+    }
+
+    class Variant {
+        +int ID
+        +int ExperimentID
+        +int StrategyID
+        +string Variant
+        +Nullable~string~ Notes
+        +string StrategyName
+        +string Class
+        +JSONColumn Params
+    }
+
+    class Signal {
+        +int AssetID
+        +SignalType Type
+        +float64 Price
+        +time.Time Timestamp
+        +string StrategyName
+        +float64 Confidence
+        +map Metadata
+    }
+
+    class AssetVariant {
+        +int ID
+        +int VariantID
+        +int ExperimentID
+        +int StrategyID
+        +int AssetID
+        +SignalType Signal
+        +float64 Price
+        +float64 Confidence
+        +time.Time CreatedAt
+    }
+
+    %% ==========================================
+    %% DOMAIN MODEL RELATIONSHIPS
+    %% ==========================================
+    Experiment "1" *-- "many" ExperimentAsset : Assets
+    Experiment "1" *-- "many" Variant : Variants
+    Variant "1" --> "1" Strategy : references
+    
+    Variant ..> Signal : produces (BUY | HOLD | SELL)
+    SignalDispatcher ..> Signal : dispatches
+    AssetVariant ..> Signal : records

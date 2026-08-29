@@ -1,0 +1,9 @@
+dir: "{{.InterfaceDir}}/mocks"
+filename: "mock{{.InterfaceName}}.go"
+structname: "Mock{{.InterfaceName}}"
+pkgname: "mocks"
+packages:
+  quantito-engine/internal/interfaces:
+    config:
+      all: True
+      recursive: True
