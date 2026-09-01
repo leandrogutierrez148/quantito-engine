@@ -42,9 +42,9 @@ It serves as the central hub for evaluating strategies, generating discrete trad
 - **ISignalSink**: Pluggable destination for emitted signals (e.g. `ConsoleSink`, `BrokerSink`, `BigQuerySink`).
 - **ISignalDispatcher**: Central router dispatching signals to all registered sinks.
 
-### Asset Variants (Execution History)
+### Signals (Execution History)
 
-- **AssetVariant**: Historical ledger entry recording an asset's evaluation under an experiment variant along with its emitted signal, price, confidence, and timestamp.
+- **SignalRecord**: Historical ledger entry persisted in the `signals` table recording an asset's evaluation under an experiment variant along with its emitted signal, price, confidence, and timestamp.
 
 ---
 
@@ -79,6 +79,18 @@ password = "quantito_password"
 [log]
 level = "debug" | "info" | "error"
 logger = "console" | "split-json" | "json"
+```
+
+---
+
+## Local Development with Docker Compose
+
+To spin up the local development environment with MySQL and Quantito Engine:
+
+```bash
+# From the dev directory
+cd dev
+docker compose up -d --build
 ```
 
 ---

@@ -10,27 +10,27 @@ import (
 
 // ExecutionService orchestrates experiment executions across their assigned assets and competing strategy variants.
 type ExecutionService struct {
-	experimentsRepo   interfaces.IExperimentsRepository
-	assetVariantsRepo interfaces.IAssetVariantsRepository
-	strategyFactory   interfaces.IStrategyFactory
-	signalDispatcher  interfaces.ISignalDispatcher
-	executionMutex    interfaces.IExecutionMutex
+	experimentsRepo  interfaces.IExperimentsRepository
+	signalsRepo      interfaces.ISignalsRepository
+	strategyFactory  interfaces.IStrategyFactory
+	signalDispatcher interfaces.ISignalDispatcher
+	executionMutex   interfaces.IExecutionMutex
 }
 
 // NewExecutionService creates a new ExecutionService with all required dependencies.
 func NewExecutionService(
 	experimentsRepo interfaces.IExperimentsRepository,
-	assetVariantsRepo interfaces.IAssetVariantsRepository,
+	signalsRepo interfaces.ISignalsRepository,
 	strategyFactory interfaces.IStrategyFactory,
 	signalDispatcher interfaces.ISignalDispatcher,
 	executionMutex interfaces.IExecutionMutex,
 ) interfaces.IExecutionService {
 	return &ExecutionService{
-		experimentsRepo:   experimentsRepo,
-		assetVariantsRepo: assetVariantsRepo,
-		strategyFactory:   strategyFactory,
-		signalDispatcher:  signalDispatcher,
-		executionMutex:    executionMutex,
+		experimentsRepo:  experimentsRepo,
+		signalsRepo:      signalsRepo,
+		strategyFactory:  strategyFactory,
+		signalDispatcher: signalDispatcher,
+		executionMutex:   executionMutex,
 	}
 }
 
@@ -130,7 +130,7 @@ func (e *ExecutionService) executeVariant(assetID, experimentID int, variant *mo
 		Float64("price", signal.Price).
 		Msg("Strategy generated signal")
 
-	_, err = e.assetVariantsRepo.Save(assetID, variantID, signal)
+	_, err = e.signalsRepo.Save(assetID, variantID, signal)
 	if err != nil {
 		return err
 	}

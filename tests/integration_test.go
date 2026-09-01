@@ -52,16 +52,16 @@ func (m *inMemoryExperimentsRepo) FindByExperiment(name string) (*models.Experim
 	return nil, errors.New("experiment not found")
 }
 
-type inMemoryAssetVariantsRepo struct {
+type inMemorySignalsRepo struct {
 	mu      sync.Mutex
-	records []*models.AssetVariant
+	records []*models.SignalRecord
 }
 
-func (m *inMemoryAssetVariantsRepo) Save(assetID, variantID int, signal *models.Signal) (*models.AssetVariant, error) {
+func (m *inMemorySignalsRepo) Save(assetID, variantID int, signal *models.Signal) (*models.SignalRecord, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	rec := &models.AssetVariant{
+	rec := &models.SignalRecord{
 		ID:         len(m.records) + 1,
 		AssetID:    assetID,
 		VariantID:  variantID,
@@ -74,11 +74,11 @@ func (m *inMemoryAssetVariantsRepo) Save(assetID, variantID int, signal *models.
 	return rec, nil
 }
 
-func (m *inMemoryAssetVariantsRepo) Find(assetID int, fromDate, toDate models.Nullable[time.Time]) ([]*models.AssetVariant, error) {
+func (m *inMemorySignalsRepo) Find(assetID int, fromDate, toDate models.Nullable[time.Time]) ([]*models.SignalRecord, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	var res []*models.AssetVariant
+	var res []*models.SignalRecord
 	for _, r := range m.records {
 		if r.AssetID == assetID {
 			res = append(res, r)
@@ -116,7 +116,7 @@ func (s *capturingSignalSink) GetSignals() []*models.Signal {
 	return copied
 }
 
-func setupIntegrationApp(t *testing.T) (*echo.Echo, *inMemoryExperimentsRepo, *inMemoryAssetVariantsRepo, *capturingSignalSink) {
+func setupIntegrationApp(t *testing.T) (*echo.Echo, *inMemoryExperimentsRepo, *inMemorySignalsRepo, *capturingSignalSink) {
 	// Seed Data: Experiment with 2 Assets and 2 Competing Strategy Variants (Contraposition)
 	exp1 := &models.Experiment{
 		ID:          1,
@@ -172,7 +172,7 @@ func setupIntegrationApp(t *testing.T) (*echo.Echo, *inMemoryExperimentsRepo, *i
 			2: expInactive,
 		},
 	}
-	assetVariantsRepo := &inMemoryAssetVariantsRepo{}
+	signalsRepo := &inMemorySignalsRepo{}
 
 	// Real Factories, Sinks, and Mutex
 	strategyFactory := strategies.NewStrategyFactory()
@@ -184,7 +184,7 @@ func setupIntegrationApp(t *testing.T) (*echo.Echo, *inMemoryExperimentsRepo, *i
 	// Real ExecutionService
 	executionService := services.NewExecutionService(
 		expRepo,
-		assetVariantsRepo,
+		signalsRepo,
 		strategyFactory,
 		signalDispatcher,
 		executionMutex,
@@ -195,11 +195,11 @@ func setupIntegrationApp(t *testing.T) (*echo.Echo, *inMemoryExperimentsRepo, *i
 	router := echo.New()
 	router.POST("/execute/:id", controller.Execute)
 
-	return router, expRepo, assetVariantsRepo, capturingSink
+	return router, expRepo, signalsRepo, capturingSink
 }
 
 func TestIntegration_ExecuteExperiment_Success(t *testing.T) {
-	router, _, assetVariantsRepo, capturingSink := setupIntegrationApp(t)
+	router, _, signalsRepo, capturingSink := setupIntegrationApp(t)
 
 	// 1. Perform HTTP request to execute Experiment #1
 	req := httptest.NewRequest(http.MethodPost, "/execute/1", nil)
@@ -228,12 +228,12 @@ func TestIntegration_ExecuteExperiment_Success(t *testing.T) {
 	assert.Len(t, signalsByAsset[101], 2, "Asset 101 should have 2 signals (one per strategy)")
 	assert.Len(t, signalsByAsset[102], 2, "Asset 102 should have 2 signals (one per strategy)")
 
-	// 4. Verify historical persistence in assetVariantsRepo
-	assert.Len(t, assetVariantsRepo.records, 4, "Expected 4 records persisted in asset_variants")
+	// 4. Verify historical persistence in signalsRepo
+	assert.Len(t, signalsRepo.records, 4, "Expected 4 records persisted in signals table")
 }
 
 func TestIntegration_ExecuteExperiment_Inactive(t *testing.T) {
-	router, _, assetVariantsRepo, capturingSink := setupIntegrationApp(t)
+	router, _, signalsRepo, capturingSink := setupIntegrationApp(t)
 
 	// Execute Experiment #2 which is PAUSED
 	req := httptest.NewRequest(http.MethodPost, "/execute/2", nil)
@@ -244,7 +244,7 @@ func TestIntegration_ExecuteExperiment_Inactive(t *testing.T) {
 	// Should respond 200 OK and gracefully skip execution
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.Empty(t, capturingSink.GetSignals(), "No signals should be emitted for inactive experiment")
-	assert.Empty(t, assetVariantsRepo.records, "No records should be persisted for inactive experiment")
+	assert.Empty(t, signalsRepo.records, "No records should be persisted for inactive experiment")
 }
 
 func TestIntegration_ExecuteExperiment_NotFound(t *testing.T) {

@@ -13,7 +13,7 @@ import (
 
 func TestExecutionService_Execute_Success(t *testing.T) {
 	mockExperimentsRepo := mocks.NewMockIExperimentsRepository(t)
-	mockAssetVariants := mocks.NewMockIAssetVariantsRepository(t)
+	mockSignalsRepo := mocks.NewMockISignalsRepository(t)
 	mockStrategyFactory := mocks.NewMockIStrategyFactory(t)
 	mockSignalDispatcher := mocks.NewMockISignalDispatcher(t)
 	mockExecutionMutex := mocks.NewMockIExecutionMutex(t)
@@ -21,7 +21,7 @@ func TestExecutionService_Execute_Success(t *testing.T) {
 
 	service := services.NewExecutionService(
 		mockExperimentsRepo,
-		mockAssetVariants,
+		mockSignalsRepo,
 		mockStrategyFactory,
 		mockSignalDispatcher,
 		mockExecutionMutex,
@@ -60,7 +60,7 @@ func TestExecutionService_Execute_Success(t *testing.T) {
 	expectedSignal := models.NewSignal(assetID, models.SignalBuy, 150.0, "fifty_day_avg")
 	mockStrategy.EXPECT().GenerateSignal(assetID, mock.AnythingOfType("map[string]interface {}")).Return(expectedSignal, nil)
 
-	mockAssetVariants.EXPECT().Save(assetID, variantID, expectedSignal).Return(&models.AssetVariant{
+	mockSignalsRepo.EXPECT().Save(assetID, variantID, expectedSignal).Return(&models.SignalRecord{
 		ID:           55,
 		VariantID:    variantID,
 		ExperimentID: experimentID,
@@ -77,14 +77,14 @@ func TestExecutionService_Execute_Success(t *testing.T) {
 
 func TestExecutionService_Execute_InactiveExperiment(t *testing.T) {
 	mockExperimentsRepo := mocks.NewMockIExperimentsRepository(t)
-	mockAssetVariants := mocks.NewMockIAssetVariantsRepository(t)
+	mockSignalsRepo := mocks.NewMockISignalsRepository(t)
 	mockStrategyFactory := mocks.NewMockIStrategyFactory(t)
 	mockSignalDispatcher := mocks.NewMockISignalDispatcher(t)
 	mockExecutionMutex := mocks.NewMockIExecutionMutex(t)
 
 	service := services.NewExecutionService(
 		mockExperimentsRepo,
-		mockAssetVariants,
+		mockSignalsRepo,
 		mockStrategyFactory,
 		mockSignalDispatcher,
 		mockExecutionMutex,
@@ -103,14 +103,14 @@ func TestExecutionService_Execute_InactiveExperiment(t *testing.T) {
 
 func TestExecutionService_Execute_ExperimentNotFoundOrError(t *testing.T) {
 	mockExperimentsRepo := mocks.NewMockIExperimentsRepository(t)
-	mockAssetVariants := mocks.NewMockIAssetVariantsRepository(t)
+	mockSignalsRepo := mocks.NewMockISignalsRepository(t)
 	mockStrategyFactory := mocks.NewMockIStrategyFactory(t)
 	mockSignalDispatcher := mocks.NewMockISignalDispatcher(t)
 	mockExecutionMutex := mocks.NewMockIExecutionMutex(t)
 
 	service := services.NewExecutionService(
 		mockExperimentsRepo,
-		mockAssetVariants,
+		mockSignalsRepo,
 		mockStrategyFactory,
 		mockSignalDispatcher,
 		mockExecutionMutex,

@@ -12,9 +12,9 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
-func TestAssetVariantsRepository_Save_Success(t *testing.T) {
+func TestSignalsRepository_Save_Success(t *testing.T) {
 	mockDb := mocks.NewMockIDBHandler(t)
-	repo := NewAssetVariantsRepository(mockDb)
+	repo := NewSignalsRepository(mockDb)
 
 	signal := &models.Signal{
 		AssetID:      100,
@@ -24,7 +24,7 @@ func TestAssetVariantsRepository_Save_Success(t *testing.T) {
 		StrategyName: "FiftyDayAvg",
 	}
 
-	expectedResult := models.AssetVariant{
+	expectedResult := models.SignalRecord{
 		ID:           1,
 		VariantID:    2,
 		ExperimentID: 3,
@@ -37,9 +37,9 @@ func TestAssetVariantsRepository_Save_Success(t *testing.T) {
 	}
 
 	mockDb.EXPECT().
-		QueryOne("CALL sp_save_asset_variant (?, ?, ?, ?, ?)", mock.AnythingOfType("*models.AssetVariant"), []any{100, 2, "BUY", 150.50, 0.95}).
+		QueryOne("CALL sp_save_signal (?, ?, ?, ?, ?)", mock.AnythingOfType("*models.SignalRecord"), []any{100, 2, "BUY", 150.50, 0.95}).
 		RunAndReturn(func(query string, dest any, args ...any) error {
-			ptr := dest.(*models.AssetVariant)
+			ptr := dest.(*models.SignalRecord)
 			*ptr = expectedResult
 			return nil
 		})
@@ -50,9 +50,9 @@ func TestAssetVariantsRepository_Save_Success(t *testing.T) {
 	assert.Equal(t, &expectedResult, result)
 }
 
-func TestAssetVariantsRepository_Save_Error(t *testing.T) {
+func TestSignalsRepository_Save_Error(t *testing.T) {
 	mockDb := mocks.NewMockIDBHandler(t)
-	repo := NewAssetVariantsRepository(mockDb)
+	repo := NewSignalsRepository(mockDb)
 
 	signal := &models.Signal{
 		AssetID: 100,
@@ -61,7 +61,7 @@ func TestAssetVariantsRepository_Save_Error(t *testing.T) {
 	}
 
 	mockDb.EXPECT().
-		QueryOne("CALL sp_save_asset_variant (?, ?, ?, ?, ?)", mock.AnythingOfType("*models.AssetVariant"), []any{100, 2, "BUY", 150.50, 0.0}).
+		QueryOne("CALL sp_save_signal (?, ?, ?, ?, ?)", mock.AnythingOfType("*models.SignalRecord"), []any{100, 2, "BUY", 150.50, 1.0}).
 		Return(errors.New("db error"))
 
 	result, err := repo.Save(100, 2, signal)
@@ -70,12 +70,12 @@ func TestAssetVariantsRepository_Save_Error(t *testing.T) {
 	assert.Nil(t, result)
 }
 
-func TestAssetVariantsRepository_Find_Success(t *testing.T) {
+func TestSignalsRepository_Find_Success(t *testing.T) {
 	mockDb := mocks.NewMockIDBHandler(t)
-	repo := NewAssetVariantsRepository(mockDb)
+	repo := NewSignalsRepository(mockDb)
 
 	now := time.Now()
-	expectedResults := []*models.AssetVariant{
+	expectedResults := []*models.SignalRecord{
 		{
 			ID:      1,
 			AssetID: 100,
@@ -87,9 +87,9 @@ func TestAssetVariantsRepository_Find_Success(t *testing.T) {
 	toDate := models.NotNull(now)
 
 	mockDb.EXPECT().
-		QueryAll("CALL sp_find_asset_variants (?, ?, ?)", mock.AnythingOfType("*[]*models.AssetVariant"), []any{100, fromDate.Val, toDate.Val}).
+		QueryAll("CALL sp_find_signals (?, ?, ?)", mock.AnythingOfType("*[]*models.SignalRecord"), []any{100, fromDate.Val, toDate.Val}).
 		RunAndReturn(func(query string, dest any, args ...any) error {
-			ptr := dest.(*[]*models.AssetVariant)
+			ptr := dest.(*[]*models.SignalRecord)
 			*ptr = expectedResults
 			return nil
 		})
@@ -100,15 +100,15 @@ func TestAssetVariantsRepository_Find_Success(t *testing.T) {
 	assert.Equal(t, expectedResults, results)
 }
 
-func TestAssetVariantsRepository_Find_NullDates(t *testing.T) {
+func TestSignalsRepository_Find_NullDates(t *testing.T) {
 	mockDb := mocks.NewMockIDBHandler(t)
-	repo := NewAssetVariantsRepository(mockDb)
+	repo := NewSignalsRepository(mockDb)
 
 	fromDate := models.Null[time.Time]()
 	toDate := models.Null[time.Time]()
 
 	mockDb.EXPECT().
-		QueryAll("CALL sp_find_asset_variants (?, ?, ?)", mock.AnythingOfType("*[]*models.AssetVariant"), []any{100, nil, nil}).
+		QueryAll("CALL sp_find_signals (?, ?, ?)", mock.AnythingOfType("*[]*models.SignalRecord"), []any{100, nil, nil}).
 		Return(nil)
 
 	results, err := repo.Find(100, fromDate, toDate)

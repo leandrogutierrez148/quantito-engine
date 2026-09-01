@@ -1,4 +1,5 @@
-config.toml
+**/config.toml
+!**/config.example.toml
 .vscode/
 .code-workspace
 apidoc/

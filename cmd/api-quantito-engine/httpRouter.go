@@ -38,7 +38,7 @@ func initRoutes(router *echo.Echo, conf *Config) {
 	}
 
 	experimentsRepo := repositories.NewExperimentsRepository(dbHandler)
-	assetVariantsRepo := repositories.NewAssetVariantsRepository(dbHandler)
+	signalsRepo := repositories.NewSignalsRepository(dbHandler)
 
 	strategyFactory := strategies.NewStrategyFactory()
 	consoleSink := sinks.NewConsoleSink()
@@ -47,7 +47,7 @@ func initRoutes(router *echo.Echo, conf *Config) {
 
 	executionService := services.NewExecutionService(
 		experimentsRepo,
-		assetVariantsRepo,
+		signalsRepo,
 		strategyFactory,
 		signalDispatcher,
 		executionMutex,

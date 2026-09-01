@@ -16,7 +16,7 @@ classDiagram
 
     class ExecutionService {
         -experimentsRepo IExperimentsRepository
-        -assetVariantsRepo IAssetVariantsRepository
+        -signalsRepo ISignalsRepository
         -strategyFactory IStrategyFactory
         -signalDispatcher ISignalDispatcher
         -executionMutex IExecutionMutex
@@ -127,15 +127,15 @@ classDiagram
         +FindByExperiment(experimentID int) []*Variant, error
     }
 
-    class IAssetVariantsRepository {
+    class ISignalsRepository {
         <<interface>>
-        +Save(assetID int, variantID int, signal *Signal) *AssetVariant, error
-        +Find(assetID int, fromDate Nullable~Time~, toDate Nullable~Time~) []*AssetVariant, error
+        +Save(assetID int, variantID int, signal *Signal) *SignalRecord, error
+        +Find(assetID int, fromDate Nullable~Time~, toDate Nullable~Time~) []*SignalRecord, error
     }
-    class AssetVariantsRepository {
+    class SignalsRepository {
         -db IDBHandler
-        +Save(assetID int, variantID int, signal *Signal) *AssetVariant, error
-        +Find(assetID int, fromDate Nullable~Time~, toDate Nullable~Time~) []*AssetVariant, error
+        +Save(assetID int, variantID int, signal *Signal) *SignalRecord, error
+        +Find(assetID int, fromDate Nullable~Time~, toDate Nullable~Time~) []*SignalRecord, error
     }
 
     class IExecutionMutex {
@@ -158,19 +158,19 @@ classDiagram
     }
 
     ExecutionService --> IExperimentsRepository
-    ExecutionService --> IAssetVariantsRepository
+    ExecutionService --> ISignalsRepository
     ExecutionService --> IExecutionMutex
 
     IExperimentsRepository <|.. ExperimentsRepository
     IExperimentAssetsRepository <|.. ExperimentAssetsRepository
     IVariantsRepository <|.. VariantsRepository
-    IAssetVariantsRepository <|.. AssetVariantsRepository
+    ISignalsRepository <|.. SignalsRepository
     IExecutionMutex <|.. ExecutionMutex
 
     ExperimentsRepository --> IDBHandler
     ExperimentAssetsRepository --> IDBHandler
     VariantsRepository --> IDBHandler
-    AssetVariantsRepository --> IDBHandler
+    SignalsRepository --> IDBHandler
 
     %% ==========================================
     %% LAYER: DOMAIN MODELS
@@ -225,7 +225,7 @@ classDiagram
         +map Metadata
     }
 
-    class AssetVariant {
+    class SignalRecord {
         +int ID
         +int VariantID
         +int ExperimentID
@@ -246,4 +246,4 @@ classDiagram
     
     Variant ..> Signal : produces (BUY | HOLD | SELL)
     SignalDispatcher ..> Signal : dispatches
-    AssetVariant ..> Signal : records
+    SignalsRepository ..> SignalRecord : records
