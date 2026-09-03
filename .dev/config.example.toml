@@ -1,8 +1,6 @@
-# Web server configuration
 [api]
 listen = ":8080"
 
-# Database connection configuration
 [database]
 host = "mysql:3306"
 schema = "quantito-engine"
@@ -13,7 +11,6 @@ maxIdleConn = 10
 maxTTLConn = 180
 maxIdleTimeConn = 60
 
-# Logging configuration
 [log]
 level = "info"
 logger = "console"
