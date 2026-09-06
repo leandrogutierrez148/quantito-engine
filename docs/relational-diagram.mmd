@@ -1,0 +1,77 @@
+erDiagram
+    %% Tablas Existentes
+    EXPERIMENTS ||--o{ VARIANTS : "1:N"
+    EXPERIMENTS ||--o{ SIGNALS : "1:N"
+    VARIANTS ||--o{ SIGNALS : "1:N"
+
+    %% Nuevas Tablas de Broker
+    BROKERS ||--o{ BROKER_ACCOUNTS : "1:N (proporciona)"
+    BROKER_ACCOUNTS ||--o{ EXPERIMENT_BROKERS : "1:N (asignada a)"
+    EXPERIMENTS ||--o{ EXPERIMENT_BROKERS : "1:N (opera con)"
+    
+    %% Ejecución y Órdenes
+    BROKER_ACCOUNTS ||--o{ ORDERS : "1:N (ejecuta en)"
+    SIGNALS ||--o{ ORDERS : "1:N (genera)"
+    ORDERS ||--o{ ORDER_EXECUTIONS : "1:N (registra fills)"
+
+    BROKERS {
+        int_unsigned id PK
+        varchar code UK "ALPACA, IBKR, BINANCE, PAPER"
+        varchar name "Alpaca Securities, etc."
+        varchar adapter_class "Nombre del adaptador en Go"
+        varchar status "ACTIVE, INACTIVE"
+        datetime created_at
+    }
+
+    BROKER_ACCOUNTS {
+        int_unsigned id PK
+        int_unsigned broker_id FK "REFERENCES brokers(id)"
+        varchar name "Paper Account 1 / Live Fund A"
+        varchar environment "PAPER, LIVE, BACKTEST"
+        varchar account_number "Número de cuenta en broker"
+        varchar currency "USD, EUR, USDT"
+        json credentials_ref "Ref a Vault / SecretManager o key cifrada"
+        json config "Parámetros (max_position_size, leverage, etc.)"
+        varchar status "ACTIVE, DISABLED"
+        datetime created_at
+        datetime updated_at
+    }
+
+    EXPERIMENT_BROKERS {
+        int_unsigned id PK
+        int_unsigned experiment_id FK "REFERENCES experiments(id)"
+        int_unsigned broker_account_id FK "REFERENCES broker_accounts(id)"
+        decimal allocation_pct "Porcentaje de capital asignado (0.0 a 1.0)"
+        varchar order_type_default "MARKET, LIMIT"
+        varchar status "ACTIVE, PAUSED"
+        datetime created_at
+    }
+
+    ORDERS {
+        int_unsigned id PK
+        int_unsigned broker_account_id FK "REFERENCES broker_accounts(id)"
+        int_unsigned signal_id FK "REFERENCES signals(id)"
+        int_unsigned asset_id "ID del activo operado"
+        varchar broker_order_id "ID retornado por la API del broker"
+        varchar client_order_id UK "ID idempotente generado por Quantito"
+        varchar side "BUY, SELL"
+        varchar order_type "MARKET, LIMIT, STOP"
+        decimal requested_qty "Cantidad solicitada"
+        decimal limit_price "Precio límite (si aplica)"
+        varchar status "PENDING, SUBMITTED, FILLED, PARTIALLY_FILLED, CANCELED, REJECTED"
+        text status_message "Error o detalle devuelto por broker"
+        datetime created_at
+        datetime updated_at
+    }
+
+    ORDER_EXECUTIONS {
+        int_unsigned id PK
+        int_unsigned order_id FK "REFERENCES orders(id)"
+        varchar broker_execution_id "ID del fill/trade en el broker"
+        decimal executed_qty "Cantidad ejecutada"
+        decimal executed_price "Precio efectivo de llenado"
+        decimal commission "Comisión / Fee"
+        varchar commission_asset "Moneda del fee (USD, etc.)"
+        datetime executed_at "Timestamp oficial del fill"
+        datetime created_at
+    }

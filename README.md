@@ -83,22 +83,41 @@ logger = "console" | "split-json" | "json"
 
 ---
 
-## Local Development with Docker Compose
+## Local Development & Makefile Commands
 
-To spin up the local development environment with MySQL and Quantito Engine:
+A standard [Makefile](./Makefile) is provided to simplify development, testing, and service orchestration:
+
+### Quick Reference
+
+| Command | Description |
+| :--- | :--- |
+| `make up` | Spin up all services (`mysql` and `quantito-engine`) with Docker Compose in the background. |
+| `make up-local` | Run the `quantito-engine` service directly in the console using local Go runtime. |
+| `make down` | Stop and remove Docker Compose containers. |
+| `make prepare-integration-tests` | Spin up local environment for integration tests (starts the `mysql` container). |
+| `make integration-tests` | Run the integration test suite (`go test -v ./tests/...`). |
+| `make unit-tests` | Run all unit tests (`go test -v ./internal/... ./cmd/...`). |
+| `make test` | Run both unit and integration test suites. |
+| `make help` | Show available Makefile targets and descriptions. |
+
+### Usage Examples
 
 ```bash
-# From the dev directory
-cd dev
-docker compose up -d --build
+# Start all containers in background
+make up
+
+# Run locally in terminal (reads .dev/config.toml)
+make up-local
+
+# Prepare database container for running integration tests
+make prepare-integration-tests
+
+# Run test suites
+make unit-tests
+make integration-tests
+
+# Teardown background containers
+make down
 ```
 
----
 
-## Testing
-
-Run unit tests across all packages:
-
-```bash
-go test ./...
-```
