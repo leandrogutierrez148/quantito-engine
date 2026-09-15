@@ -53,7 +53,7 @@ It serves as the central hub for evaluating strategies, generating discrete trad
 This project uses [mockery](https://vektra.github.io/mockery/latest/installation/) for interface mock generation and [husky](https://github.com/automation-co/husky#docs) for managing Git hooks:
 
 ```bash
-mockery
+go run github.com/vektra/mockery/v2@v2.53.7 --config .mockery.yaml
 husky install
 ```
 
