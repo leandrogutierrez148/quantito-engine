@@ -71,17 +71,11 @@ quantito-engine/
 Run before every commit:
 
 ```bash
-# 1. Run unit tests
-go test -count=1 -v ./internal/... ./cmd/...
-
-# 2. Run integration tests (requires MySQL running)
-go test -count=1 -v ./tests/...
-
-# 3. Or run all tests via Makefile
-make test
-
-# 4. Regenerate mocks if interfaces changed
+# Regenerate mocks if interfaces changed
 mockery
+
+# Run all tests via Makefile
+make test
 ```
 
 ---
