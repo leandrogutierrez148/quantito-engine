@@ -26,11 +26,12 @@ func TestSignalDispatcher(t *testing.T) {
 	console := sinks.NewConsoleSink()
 	dispatcher := sinks.NewSignalDispatcher(console, mock)
 
-	signal := models.NewSignal(101, models.SignalBuy, 250.75, "fifty_day_avg")
+	signal := models.NewSignal("AAPL", models.SignalBuy, 250.75, "fifty_day_avg")
 	err := dispatcher.Dispatch(signal)
 
 	assert.NoError(t, err)
 	assert.Len(t, mock.received, 1)
 	assert.Equal(t, models.SignalBuy, mock.received[0].Type)
 	assert.Equal(t, 250.75, mock.received[0].Price)
+	assert.Equal(t, "AAPL", mock.received[0].Asset)
 }

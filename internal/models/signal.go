@@ -12,7 +12,7 @@ const (
 
 // Signal represents an in-memory trading recommendation emitted by a strategy.
 type Signal struct {
-	AssetID      int            `json:"assetId"`
+	Asset        string         `json:"asset"`
 	Type         SignalType     `json:"type"`
 	Price        float64        `json:"price"`
 	Timestamp    time.Time      `json:"timestamp"`
@@ -21,9 +21,9 @@ type Signal struct {
 	Metadata     map[string]any `json:"metadata,omitempty"`
 }
 
-func NewSignal(assetID int, signalType SignalType, price float64, strategyName string) *Signal {
+func NewSignal(asset string, signalType SignalType, price float64, strategyName string) *Signal {
 	return &Signal{
-		AssetID:      assetID,
+		Asset:        asset,
 		Type:         signalType,
 		Price:        price,
 		Timestamp:    time.Now().UTC(),
@@ -34,14 +34,14 @@ func NewSignal(assetID int, signalType SignalType, price float64, strategyName s
 
 // SignalRecord represents the persisted signal entry in the database.
 type SignalRecord struct {
-	ID           int                 `db:"id" json:"id"`
-	VariantID    int                 `db:"variant_id" json:"variantId"`
-	ExperimentID int                 `db:"experiment_id" json:"experimentId"`
-	StrategyID   int                 `db:"strategy_id" json:"strategyId"`
-	AssetID      int                 `db:"asset_id" json:"assetId"`
-	Signal       SignalType          `db:"signal" json:"signal"`
-	Price        float64             `db:"price" json:"price"`
-	Confidence   float64             `db:"confidence" json:"confidence"`
-	CreatedAt    time.Time           `db:"created_at" json:"createdAt"`
-	Completed    Nullable[time.Time] `db:"completed" json:"completed,omitempty"`
+	ID                 int        `db:"id" json:"id"`
+	ExecutionVariantID int        `db:"execution_variant_id" json:"executionVariantId"`
+	ExecutionID        int        `db:"execution_id" json:"executionId,omitempty"`
+	VariantID          int        `db:"variant_id" json:"variantId,omitempty"`
+	VariantName        string     `db:"variant_name" json:"variantName,omitempty"`
+	Asset              string     `db:"asset" json:"asset"`
+	Signal             SignalType `db:"signal" json:"signal"`
+	Price              float64    `db:"price" json:"price"`
+	Confidence         float64    `db:"confidence" json:"confidence"`
+	CreatedAt          time.Time  `db:"created_at" json:"createdAt"`
 }

@@ -21,7 +21,11 @@ func findConfigFile() string {
 	}
 
 	candidates := []string{
+		"../configs/config.toml",
+		"../../configs/config.toml",
+		"tests/integration/configs/config.toml",
 		"../../../.dev/config.toml",
+		".dev/config.toml",
 	}
 
 	for _, path := range candidates {
@@ -30,7 +34,7 @@ func findConfigFile() string {
 		}
 	}
 
-	return "../../../.dev/config.toml"
+	return "../configs/config.toml"
 }
 
 // LoadDBConfig loads database configuration from .dev/config.toml with environment variable fallbacks
@@ -82,9 +86,11 @@ func NewTestDBHandler(t *testing.T) interfaces.IDBHandler {
 	return dbHandler
 }
 
-// CleanSignalsTable truncates or deletes records from the signals table for test isolation
+// CleanSignalsTable truncates or deletes records from the signals and executions tables for test isolation
 func CleanSignalsTable(t *testing.T, dbHandler interfaces.IDBHandler) {
 	t.Helper()
 	var dummy any
 	_ = dbHandler.QueryScalar("DELETE FROM `signals`", &dummy)
+	_ = dbHandler.QueryScalar("DELETE FROM `execution_variants`", &dummy)
+	_ = dbHandler.QueryScalar("DELETE FROM `executions`", &dummy)
 }

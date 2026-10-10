@@ -20,7 +20,7 @@ func TestVariantsRepository_FindByExperiment_Success(t *testing.T) {
 			ID:           1,
 			ExperimentID: 1,
 			StrategyID:   10,
-			Variant:      "Variant A",
+			Name:         "Variant A",
 			StrategyName: "Fifty Day Avg",
 			Class:        "fifty_day_avg",
 		},

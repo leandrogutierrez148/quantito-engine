@@ -40,6 +40,7 @@ func initRoutes(router *echo.Echo, conf *Config) {
 	}
 
 	experimentsRepo := repositories.NewExperimentsRepository(dbHandler)
+	executionsRepo := repositories.NewExecutionsRepository(dbHandler)
 	signalsRepo := repositories.NewSignalsRepository(dbHandler)
 
 	quantitoUrl := os.Getenv("QUANTITO_API_URL")
@@ -55,6 +56,7 @@ func initRoutes(router *echo.Echo, conf *Config) {
 
 	executionService := services.NewExecutionService(
 		experimentsRepo,
+		executionsRepo,
 		signalsRepo,
 		strategyFactory,
 		signalDispatcher,

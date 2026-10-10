@@ -17,7 +17,7 @@ func (s *ConsoleSink) Name() string {
 }
 
 func (s *ConsoleSink) Send(signal *models.Signal) error {
-	fmt.Printf("[SIGNAL DISPATCHED] Asset: %d | Strategy: %s | Signal: %s | Price: %.4f | Timestamp: %s\n",
-		signal.AssetID, signal.StrategyName, signal.Type, signal.Price, signal.Timestamp.Format("2006-01-02 15:04:05"))
+	fmt.Printf("[SIGNAL DISPATCHED] Asset: %s | Strategy: %s | Signal: %s | Price: %.4f | Timestamp: %s\n",
+		signal.Asset, signal.StrategyName, signal.Type, signal.Price, signal.Timestamp.Format("2006-01-02 15:04:05"))
 	return nil
 }

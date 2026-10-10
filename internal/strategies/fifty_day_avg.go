@@ -68,7 +68,7 @@ func getFloatParam(params map[string]any, keys ...string) (float64, bool) {
 	return 0, false
 }
 
-func (s *FiftyDayAvgStrategy) GenerateSignal(assetID int, params map[string]any) (*models.Signal, error) {
+func (s *FiftyDayAvgStrategy) GenerateSignal(asset string, params map[string]any) (*models.Signal, error) {
 	currentPrice, ok := getFloatParam(params, "current_price", "close", "lastTradePrice", "price")
 	if !ok {
 		currentPrice = 100.0
@@ -95,7 +95,7 @@ func (s *FiftyDayAvgStrategy) GenerateSignal(assetID int, params map[string]any)
 		signalOn = sOn
 	}
 
-	symbol := fmt.Sprintf("ASSET_%d", assetID)
+	symbol := asset
 	if sym, ok := params["symbol"].(string); ok && sym != "" {
 		symbol = sym
 	}
@@ -126,7 +126,7 @@ func (s *FiftyDayAvgStrategy) GenerateSignal(assetID int, params map[string]any)
 	}
 
 	if len(evalResp.Signals) == 0 {
-		return models.NewSignal(assetID, models.SignalHold, currentPrice, "fifty_day_avg"), nil
+		return models.NewSignal(asset, models.SignalHold, currentPrice, "fifty_day_avg"), nil
 	}
 
 	first := evalResp.Signals[0]
@@ -136,7 +136,7 @@ func (s *FiftyDayAvgStrategy) GenerateSignal(assetID int, params map[string]any)
 		price = currentPrice
 	}
 
-	signal := models.NewSignal(assetID, signalType, price, "fifty_day_avg")
+	signal := models.NewSignal(asset, signalType, price, "fifty_day_avg")
 	if first.Confidence > 0 {
 		signal.Confidence = first.Confidence
 	}

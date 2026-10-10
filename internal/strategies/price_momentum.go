@@ -11,7 +11,7 @@ func NewPriceMomentumStrategy() interfaces.IStrategy {
 	return &PriceMomentumStrategy{}
 }
 
-func (s *PriceMomentumStrategy) GenerateSignal(assetID int, params map[string]any) (*models.Signal, error) {
+func (s *PriceMomentumStrategy) GenerateSignal(asset string, params map[string]any) (*models.Signal, error) {
 	currentPrice := 100.0
 	if priceParam, ok := params["current_price"].(float64); ok {
 		currentPrice = priceParam
@@ -36,6 +36,6 @@ func (s *PriceMomentumStrategy) GenerateSignal(assetID int, params map[string]an
 		}
 	}
 
-	signal := models.NewSignal(assetID, signalType, currentPrice, "price_momentum")
+	signal := models.NewSignal(asset, signalType, currentPrice, "price_momentum")
 	return signal, nil
 }

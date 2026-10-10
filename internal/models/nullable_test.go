@@ -62,7 +62,7 @@ func TestScan(t *testing.T) {
 
 	t.Run("Returns error on unsupported conversions", func(t *testing.T) {
 		n := Null[int]()
-		err := n.Scan(Experiment{Experiment: "Test"})
+		err := n.Scan(Experiment{Name: "Test"})
 
 		assert.Error(t, err)
 		assert.False(t, n.Valid)

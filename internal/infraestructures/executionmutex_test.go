@@ -11,10 +11,10 @@ func TestExecutionMutexLock(t *testing.T) {
 		mutex: mutexMock,
 	}
 
-	expectedKey := "1:10:101"
+	expectedKey := "1:10:AAPL"
 	mutexMock.EXPECT().LockKey(expectedKey).Once()
 	mutexMock.EXPECT().UnlockKey(expectedKey).Return(nil).Once()
 
-	mutex.Lock(1, 10, 101)
-	mutex.Unlock(1, 10, 101)
+	mutex.Lock(1, 10, "AAPL")
+	mutex.Unlock(1, 10, "AAPL")
 }

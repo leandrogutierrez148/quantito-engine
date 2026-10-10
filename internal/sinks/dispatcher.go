@@ -28,7 +28,7 @@ func (d *SignalDispatcher) Dispatch(signal *models.Signal) error {
 			log.Error().
 				Err(err).
 				Str("sink", sink.Name()).
-				Int("assetId", signal.AssetID).
+				Str("asset", signal.Asset).
 				Str("signal", string(signal.Type)).
 				Msg("Error dispatching signal to sink")
 		}

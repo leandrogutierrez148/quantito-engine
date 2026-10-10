@@ -1,0 +1,16 @@
+[api]
+listen = ":8080"
+
+[database]
+host = "mysql:3306"
+schema = "quantito-engine"
+username = "quantito_user"
+password = "quantito_password"
+maxOpenConn = 10
+maxIdleConn = 10
+maxTTLConn = 180
+maxIdleTimeConn = 60
+
+[log]
+level = "debug"
+logger = "console"
