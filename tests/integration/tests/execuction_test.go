@@ -53,7 +53,6 @@ func (s *capturingSignalSink) GetSignals() []*models.Signal {
 
 func setupIntegrationApp(t *testing.T) (*echo.Echo, interfaces.IExperimentsRepository, interfaces.IExecutionsRepository, interfaces.ISignalsRepository, *capturingSignalSink, interfaces.IDBHandler) {
 	dbHandler := testdb.NewTestDBHandler(t)
-	testdb.CleanSignalsTable(t, dbHandler)
 
 	experimentsRepo := repositories.NewExperimentsRepository(dbHandler)
 	executionsRepo := repositories.NewExecutionsRepository(dbHandler)
@@ -83,7 +82,7 @@ func setupIntegrationApp(t *testing.T) (*echo.Echo, interfaces.IExperimentsRepos
 
 func TestIntegration_ExecuteExperiment_Success(t *testing.T) {
 	router, _, _, signalsRepo, capturingSink, dbHandler := setupIntegrationApp(t)
-	defer testdb.CleanSignalsTable(t, dbHandler)
+	testdb.CleanSignalsTable(t, dbHandler)
 
 	// 1. Perform HTTP request to execute Experiment #1
 	// Experiment 1 has 3 Assets ("AAPL", "MSFT", "NVDA") and 2 Variants (50-day SMA, Price Momentum) in MySQL
@@ -130,8 +129,7 @@ func TestIntegration_ExecuteExperiment_Success(t *testing.T) {
 }
 
 func TestIntegration_ExecuteExperiment_Inactive(t *testing.T) {
-	router, _, _, signalsRepo, capturingSink, dbHandler := setupIntegrationApp(t)
-	defer testdb.CleanSignalsTable(t, dbHandler)
+	router, _, _, signalsRepo, capturingSink, _ := setupIntegrationApp(t)
 
 	// Execute Experiment #2 which is PAUSED in MySQL seed data
 	req := httptest.NewRequest(http.MethodPost, "/execute/2", nil)
@@ -150,8 +148,7 @@ func TestIntegration_ExecuteExperiment_Inactive(t *testing.T) {
 }
 
 func TestIntegration_ExecuteExperiment_NotFound(t *testing.T) {
-	router, _, _, _, _, dbHandler := setupIntegrationApp(t)
-	defer testdb.CleanSignalsTable(t, dbHandler)
+	router, _, _, _, _, _ := setupIntegrationApp(t)
 
 	// Execute non-existent experiment
 	req := httptest.NewRequest(http.MethodPost, "/execute/999", nil)
@@ -164,8 +161,7 @@ func TestIntegration_ExecuteExperiment_NotFound(t *testing.T) {
 }
 
 func TestIntegration_ExecuteExperiment_InvalidIDParam(t *testing.T) {
-	router, _, _, _, _, dbHandler := setupIntegrationApp(t)
-	defer testdb.CleanSignalsTable(t, dbHandler)
+	router, _, _, _, _, _ := setupIntegrationApp(t)
 
 	// Execute with non-integer parameter
 	req := httptest.NewRequest(http.MethodPost, "/execute/invalid-param", nil)
