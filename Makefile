@@ -1,7 +1,9 @@
-.PHONY: help up up-local down prepare-integration-tests integration-tests unit-tests test
+.PHONY: help up up-local down prepare-integration-tests down-integration-tests integration-tests unit-tests test
 
 DOCKER_COMPOSE = docker compose -f .dev/docker-compose.yml
+TEST_DOCKER_COMPOSE = docker compose -f tests/integration/docker-compose.yml
 CONFIG_FILE ?= .dev/config.toml
+TEST_CONFIG_FILE ?= tests/integration/configs/config.toml
 
 help: ## Show this help message
 	@echo "Usage: make [target]"
@@ -19,10 +21,14 @@ down: ## Stop and remove Docker Compose containers
 	$(DOCKER_COMPOSE) down -v --remove-orphans
 
 prepare-integration-tests: ## Spin up local environment for integration tests
-	$(DOCKER_COMPOSE) up -d
+	@test -f $(TEST_CONFIG_FILE) || cp tests/integration/configs/config.example.toml $(TEST_CONFIG_FILE)
+	$(TEST_DOCKER_COMPOSE) up -d
+
+down-integration-tests: ## Stop and remove integration test containers
+	$(TEST_DOCKER_COMPOSE) down -v --remove-orphans
 
 integration-tests: ## Run integration tests
-	go test -v ./tests/...
+	CONFIG_FILE=$(TEST_CONFIG_FILE) go test -v ./tests/...
 
 unit-tests: ## Run unit tests
 	go test -v ./internal/... ./cmd/...
