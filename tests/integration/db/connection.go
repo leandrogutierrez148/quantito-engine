@@ -84,7 +84,7 @@ func NewTestDBHandler(t *testing.T) interfaces.IDBHandler {
 
 // CleanSignalsTable truncates or deletes records from the signals table for test isolation
 func CleanSignalsTable(t *testing.T, dbHandler interfaces.IDBHandler) {
-	// t.Helper()
-	// var dummy any
-	// _ = dbHandler.QueryScalar("DELETE FROM `signals`", &dummy)
+	t.Helper()
+	var dummy any
+	_ = dbHandler.QueryScalar("DELETE FROM `signals`", &dummy)
 }

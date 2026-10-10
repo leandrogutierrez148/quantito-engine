@@ -5,16 +5,24 @@ import (
 	"quantito-engine/internal/interfaces"
 )
 
-type StrategyFactory struct{}
+type StrategyFactory struct {
+	quantitoClient interfaces.IAPIClient
+}
 
-func NewStrategyFactory() interfaces.IStrategyFactory {
-	return &StrategyFactory{}
+func NewStrategyFactory(client ...interfaces.IAPIClient) interfaces.IStrategyFactory {
+	var c interfaces.IAPIClient
+	if len(client) > 0 {
+		c = client[0]
+	}
+	return &StrategyFactory{
+		quantitoClient: c,
+	}
 }
 
 func (f *StrategyFactory) CreateStrategy(strategyClass string) (interfaces.IStrategy, error) {
 	switch strategyClass {
 	case "fifty_day_avg":
-		return NewFiftyDayAvgStrategy(), nil
+		return NewFiftyDayAvgStrategy(f.quantitoClient), nil
 	case "price_momentum":
 		return NewPriceMomentumStrategy(), nil
 	default:
