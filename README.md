@@ -1,123 +1,151 @@
-# Quantito Engine
+# Quantito Engine (`quantito-engine`)
 
-**Quantito Engine** is the execution and orchestration engine of **Quantito**, an automated trading and financial strategy platform.
-
-It serves as the central hub for evaluating strategies, generating discrete trading signals, and dispatching signals to active destinations (consoles, brokers, ledgers) under a parallel contraposition model.
+**Quantito Engine** is the execution, orchestration, and benchmarking engine of the **Quantito Financial Platform**. Built with Go (1.22+) and Echo, it orchestrates quantitative experiments, evaluates strategies under a parallel contraposition model, maintains historical signal ledgers, and dispatches actionable trade recommendations to active sinks.
 
 ---
 
-## Core Architecture & Responsibilities
+## 1. Role in the Quantito Ecosystem
 
-1. **Contraposition Execution**: Evaluates all strategy variants of an experiment concurrently across the same asset universe, guaranteeing unbiased comparative performance tracking.
-2. **Experiments & Experiment Assets**: Defines and manages quantitative experiments and assigns the specific assets (`ExperimentAssets`) participating in each study.
-3. **Strategy Evaluation & Signal Generation**: Evaluates quantitative strategies (e.g. `fifty_day_avg`, `price_momentum`) for each asset to emit standardized trading signals: **`BUY`**, **`HOLD`**, or **`SELL`**.
-4. **Signal Sinks & Dispatching**: Dispatches generated signals through a pluggable `SignalDispatcher` to active sinks (ledger, brokers, Telegram, BigQuery).
-5. **Execution Ledger**: Persists the lifecycle, prices, confidence levels, and historical outcomes of every strategy evaluation in the database.
+The **Quantito Platform** is partitioned into three decoupled services:
 
----
+```mermaid
+graph TD
+    subgraph Ingestion ["1. Data Ingestion (quantito-pipe)"]
+        EODHD[EODHD Financial API] -->|Extract Quotes| Pipe[quantito-pipe]
+        Pipe -->|Load Batches| BQ[(BigQuery / Data Lake)]
+    end
 
-## Key Domain Concepts
+    subgraph StrategyEngine ["2. Quantitative Engine (quantito)"]
+        API["quantito (FastAPI Service)"]
+        Strategies["StrategyRegistry: fifty_day_avg, price_momentum, ..."]
+        API --- Strategies
+        BQ -.->|Market Quotes| API
+    end
 
-### Experiments
-
-- **Experiment**: Orchestration unit in charge of:
-  - Ensuring concurrent execution of the strategies to compare.
-  - Defining participating assets of the experiment, via `experimentAssets`.
-  - Evaluating signals emitted by the participating strategies.
-
-- **ExperimentAsset**: Associative entity linking an asset (`AssetID`) to an active experiment (`ExperimentID`), determining eligibility.
-
-### Variants & Strategies
-
-- **Variant**: A variant within an experiment representing a distinct strategy configuration in competition.
-- **Strategy**: The pluggable quantitative algorithm (e.g. `fifty_day_avg`, `price_momentum`) evaluating market data to produce a **`Signal`**.
-- **Signal**: Standardized recommendation produced by a strategy:
-  - `Type`: **`BUY`**, **`HOLD`**, or **`SELL`**.
-  - `Price`: Asset price at the evaluation moment.
-  - `Confidence`: Confidence score from $0.0$ to $1.0$.
-  - `Timestamp`: UTC timestamp of the signal.
-
-### Signal Sinks & Dispatcher
-
-- **ISignalSink**: Pluggable destination for emitted signals (e.g. `ConsoleSink`, `BrokerSink`, `BigQuerySink`).
-- **ISignalDispatcher**: Central router dispatching signals to all registered sinks.
-
-### Signals (Execution History)
-
-- **SignalRecord**: Historical ledger entry persisted in the `signals` table recording an asset's evaluation under an experiment variant along with its emitted signal, price, confidence, and timestamp.
-
----
-
-## Dependencies
-
-This project uses [mockery](https://vektra.github.io/mockery/latest/installation/) for interface mock generation and [husky](https://github.com/automation-co/husky#docs) for managing Git hooks:
-
-```bash
-mockery
-husky install
+    subgraph Orchestration ["3. Execution Engine (quantito-engine)"]
+        Client[Scheduler / CLI / Webhook] -->|POST /execute/:id| Engine["quantito-engine (Go Orchestrator)"]
+        Engine <--> MySQL[(MySQL: experiments, variants, signals)]
+        Engine -->|POST /api/v1/strategies/:name/evaluate| API
+        Engine -->|Dispatch Signals| Sinks[SignalDispatcher: Console, Brokers, Ledgers]
+    end
 ```
 
+| Service | Technology | Role |
+| :--- | :--- | :--- |
+| **`quantito-pipe`** | Python / Cloud Run Job | Ingests market quotes (EOD, Delayed, Real-time) from EODHD into BigQuery. |
+| **`quantito`** | Python 3.12 / FastAPI | Pure quantitative strategy evaluation service (`fifty_day_avg`, `price_momentum`). |
+| **`quantito-engine`** *(this repo)* | Go 1.22+ / Echo / MySQL | Experiment orchestrator, parallel contraposition, concurrency locks, signal ledger, and dispatcher. |
+
 ---
 
-## Configuration
+## 2. Core Architecture & Responsibilities
 
-The application is configured via `config.toml`:
+1. **Parallel Contraposition Execution**: Concurrently evaluates all strategy variants belonging to an experiment across identical asset universes, guaranteeing unbiased comparative performance tracking.
+2. **Experiment & Asset Universe Management**: Organizes experiments (`experiments`), associates eligible assets (`experimentAssets`), and configures strategy variants (`variants`).
+3. **Delegated Strategy Evaluation**: Calls the **`quantito`** strategy service over HTTP REST (`POST /api/v1/strategies/:name/evaluate`) via `IAPIClient`, keeping strategy algorithms decoupled from orchestration logic.
+4. **Signal Ledger**: Persists evaluation results, market prices, confidence metrics, and emitted signals (`BUY`, `HOLD`, `SELL`) in the MySQL `signals` table.
+5. **Signal Dispatching**: Routes emitted signals through an extensible `SignalDispatcher` to active sinks (e.g. `ConsoleSink`, broker APIs, notification services).
+6. **Concurrency Protection**: Enforces mutual exclusion (`ExecutionMutex` / `KeyMutex`) per experiment to prevent overlapping or race conditions during execution runs.
+
+---
+
+## 3. Key Domain Concepts
+
+### Experiments & Contraposition
+
+- **Experiment**: The root unit of orchestration. Defines participating assets and executes all assigned variants concurrently.
+- **ExperimentAsset**: Associates an asset (`AssetID`) to an experiment (`ExperimentID`), defining the asset universe.
+- **Variant**: Represents a specific strategy configuration competing within an experiment.
+
+### Strategies & Signals
+
+- **Strategy**: Pluggable quantitative algorithm (e.g. `fifty_day_avg`, `price_momentum`). Evaluated via external API request to `quantito`.
+- **Signal**: Standardized recommendation produced by strategy evaluation:
+  - `Type`: **`BUY`**, **`HOLD`**, or **`SELL`**.
+  - `Price`: Asset price at the time of evaluation.
+  - `Confidence`: Confidence score from $0.0$ to $1.0$.
+  - `Timestamp`: UTC timestamp of the evaluation.
+
+### Sinks & Dispatcher
+
+- **ISignalSink**: Pluggable destination for emitted signals (e.g. `ConsoleSink`, `BrokerSink`).
+- **ISignalDispatcher**: Central router iterating over registered sinks to dispatch emitted signals.
+
+### Historical Ledger
+
+- **SignalRecord**: Persisted in the `signals` table recording the complete audit trail: experiment ID, variant ID, asset ID, signal type, price, confidence, and execution timestamp.
+
+---
+
+## 4. Configuration
+
+The application is configured via `.dev/config.toml` or environment variables:
 
 ```toml
 # Web server configuration
 [api]
 listen = ":8080"
+quantito_url = "http://localhost:8081"   # Base URL of quantito FastAPI service
 
 # Database connection
 [database]
-host = "dbhost:3306"
+host = "localhost:3306"
 schema = "quantito-engine"
 username = "quantito_user"
 password = "quantito_password"
 
 # Logging configuration
 [log]
-level = "debug" | "info" | "error"
-logger = "console" | "split-json" | "json"
+level = "debug"                         # "debug" | "info" | "error"
+logger = "console"                      # "console" | "split-json" | "json"
 ```
+
+### Environment Variable Overrides
+
+| Variable | Description | Default |
+| :--- | :--- | :--- |
+| `API_LISTEN` | HTTP port for Echo server | `:8080` |
+| `QUANTITO_API_URL` | Base URL for `quantito` strategy service | `http://localhost:8081` |
+| `DB_HOST` | MySQL hostname and port | `localhost:3306` |
+| `DB_SCHEMA` | MySQL schema name | `quantito-engine` |
+| `DB_USER` | MySQL user | `quantito_user` |
+| `DB_PASSWORD` | MySQL password | `quantito_password` |
+| `LOG_LEVEL` | Logging verbosity | `debug` |
 
 ---
 
-## Local Development & Makefile Commands
+## 5. API Endpoints
 
-A standard [Makefile](./Makefile) is provided to simplify development, testing, and service orchestration:
+### Execute Experiment
+```http
+POST /execute/:id
+```
+Executes all variants of experiment `:id` across its associated assets, fetches evaluation from `quantito`, records emitted signals to MySQL, and dispatches them to active sinks.
 
-### Quick Reference
+---
+
+## 6. Local Development & Makefile Commands
+
+A standard [Makefile](./Makefile) provides shortcuts for local development, testing, and Docker Compose orchestration:
 
 | Command | Description |
 | :--- | :--- |
-| `make up` | Spin up all services (`mysql` and `quantito-engine`) with Docker Compose in the background. |
-| `make up-local` | Run the `quantito-engine` service directly in the console using local Go runtime. |
-| `make down` | Stop and remove Docker Compose containers. |
-| `make prepare-integration-tests` | Spin up local environment for integration tests (starts the `mysql` container). |
-| `make integration-tests` | Run the integration test suite (`go test -v ./tests/...`). |
+| `make up` | Spin up all services (`mysql` and `quantito-engine`) with Docker Compose in background. |
+| `make up-local` | Run `quantito-engine` directly on host using local Go runtime. |
+| `make down` | Stop and tear down Docker Compose containers. |
+| `make prepare-integration-tests` | Spin up MySQL container for integration test suite. |
+| `make integration-tests` | Run integration tests (`go test -v ./tests/...`). |
 | `make unit-tests` | Run all unit tests (`go test -v ./internal/... ./cmd/...`). |
-| `make test` | Run both unit and integration test suites. |
-| `make help` | Show available Makefile targets and descriptions. |
+| `make test` | Run both unit and integration tests. |
+| `make help` | Display available targets. |
 
-### Usage Examples
+### Running Tests
 
 ```bash
-# Start all containers in background
-make up
+# Run unit tests
+go test ./internal/... ./cmd/...
 
-# Run locally in terminal (reads .dev/config.toml)
-make up-local
-
-# Prepare database container for running integration tests
+# Run integration tests (requires MySQL running)
 make prepare-integration-tests
-
-# Run test suites
-make unit-tests
 make integration-tests
-
-# Teardown background containers
-make down
 ```
-
-
