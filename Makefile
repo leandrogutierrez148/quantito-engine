@@ -22,7 +22,6 @@ down: ## Stop and remove Docker Compose containers
 
 prepare-integration-tests: ## Spin up and force recreate environment for integration tests
 	@test -f $(TEST_CONFIG_FILE) || cp tests/integration/configs/config.example.toml $(TEST_CONFIG_FILE)
-	$(TEST_DOCKER_COMPOSE) down -v --remove-orphans
 	$(TEST_DOCKER_COMPOSE) up -d --force-recreate --build
 
 down-integration-tests: ## Stop and remove integration test containers
