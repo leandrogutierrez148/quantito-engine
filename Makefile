@@ -20,9 +20,10 @@ up-local: ## Run the service locally in console
 down: ## Stop and remove Docker Compose containers
 	$(DOCKER_COMPOSE) down -v --remove-orphans
 
-prepare-integration-tests: ## Spin up local environment for integration tests
+prepare-integration-tests: ## Spin up and force recreate environment for integration tests
 	@test -f $(TEST_CONFIG_FILE) || cp tests/integration/configs/config.example.toml $(TEST_CONFIG_FILE)
-	$(TEST_DOCKER_COMPOSE) up -d
+	$(TEST_DOCKER_COMPOSE) down -v --remove-orphans
+	$(TEST_DOCKER_COMPOSE) up -d --force-recreate --build
 
 down-integration-tests: ## Stop and remove integration test containers
 	$(TEST_DOCKER_COMPOSE) down -v --remove-orphans
