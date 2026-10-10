@@ -79,7 +79,7 @@ func TestFiftyDayAvgStrategy(t *testing.T) {
 	strat := strategies.NewFiftyDayAvgStrategy(client)
 
 	// Price > Avg -> Buy
-	signal, err := strat.GenerateSignal(101, map[string]any{
+	signal, err := strat.GenerateSignal("AAPL", map[string]any{
 		"current_price": 110.0,
 		"fifty_day_avg": 100.0,
 		"threshold":     0.05,
@@ -87,22 +87,25 @@ func TestFiftyDayAvgStrategy(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, models.SignalBuy, signal.Type)
 	assert.Equal(t, 110.0, signal.Price)
+	assert.Equal(t, "AAPL", signal.Asset)
 
 	// Price < Avg -> Sell
-	signal, err = strat.GenerateSignal(101, map[string]any{
+	signal, err = strat.GenerateSignal("AAPL", map[string]any{
 		"current_price": 90.0,
 		"fifty_day_avg": 100.0,
 		"threshold":     0.05,
 	})
 	assert.NoError(t, err)
 	assert.Equal(t, models.SignalSell, signal.Type)
+	assert.Equal(t, "AAPL", signal.Asset)
 
 	// Price close to Avg -> Hold
-	signal, err = strat.GenerateSignal(101, map[string]any{
+	signal, err = strat.GenerateSignal("AAPL", map[string]any{
 		"current_price": 101.0,
 		"fifty_day_avg": 100.0,
 		"threshold":     0.05,
 	})
 	assert.NoError(t, err)
 	assert.Equal(t, models.SignalHold, signal.Type)
+	assert.Equal(t, "AAPL", signal.Asset)
 }

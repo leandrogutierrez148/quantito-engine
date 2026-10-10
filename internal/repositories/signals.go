@@ -14,7 +14,7 @@ func NewSignalsRepository(db interfaces.IDBHandler) interfaces.ISignalsRepositor
 	return &signalsRepository{db}
 }
 
-func (r *signalsRepository) Save(assetID, variantID int, signal *models.Signal) (*models.SignalRecord, error) {
+func (r *signalsRepository) Save(executionVariantID int, asset string, signal *models.Signal) (*models.SignalRecord, error) {
 	var result models.SignalRecord
 
 	confidence := signal.Confidence
@@ -25,8 +25,8 @@ func (r *signalsRepository) Save(assetID, variantID int, signal *models.Signal) 
 	err := r.db.QueryOne(
 		"CALL sp_save_signal (?, ?, ?, ?, ?)",
 		&result,
-		assetID,
-		variantID,
+		executionVariantID,
+		asset,
 		string(signal.Type),
 		signal.Price,
 		confidence,
@@ -38,7 +38,16 @@ func (r *signalsRepository) Save(assetID, variantID int, signal *models.Signal) 
 	return &result, nil
 }
 
-func (r *signalsRepository) Find(assetID int, fromDate, toDate models.Nullable[time.Time]) ([]*models.SignalRecord, error) {
+func (r *signalsRepository) FindByExecution(executionID int) ([]*models.SignalRecord, error) {
+	var results []*models.SignalRecord
+	err := r.db.QueryAll("CALL sp_find_signals_by_execution (?)", &results, executionID)
+	if err != nil {
+		return nil, err
+	}
+	return results, nil
+}
+
+func (r *signalsRepository) FindByAsset(asset string, fromDate, toDate models.Nullable[time.Time]) ([]*models.SignalRecord, error) {
 	var results []*models.SignalRecord
 
 	var fromVal any
@@ -52,15 +61,14 @@ func (r *signalsRepository) Find(assetID int, fromDate, toDate models.Nullable[t
 	}
 
 	err := r.db.QueryAll(
-		"CALL sp_find_signals (?, ?, ?)",
+		"CALL sp_find_signals_by_asset (?, ?, ?)",
 		&results,
-		assetID,
+		asset,
 		fromVal,
 		toVal,
 	)
 	if err != nil {
 		return nil, err
 	}
-
 	return results, nil
 }

@@ -33,3 +33,15 @@ func TestExperiment_GetParam(t *testing.T) {
 	_, ok = exp.GetParam("non_existing")
 	assert.False(t, ok)
 }
+
+func TestExperiment_GetAssets(t *testing.T) {
+	exp := models.Experiment{
+		Assets: models.NewJsonColumn([]string{"AAPL", "NVDA"}),
+	}
+
+	assets := exp.GetAssets()
+	assert.Equal(t, []string{"AAPL", "NVDA"}, assets)
+
+	var nilExp *models.Experiment
+	assert.Nil(t, nilExp.GetAssets())
+}

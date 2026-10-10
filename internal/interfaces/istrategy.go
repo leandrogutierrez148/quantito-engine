@@ -5,5 +5,5 @@ import (
 )
 
 type IStrategy interface {
-	GenerateSignal(assetID int, params map[string]any) (*models.Signal, error)
+	GenerateSignal(asset string, params map[string]any) (*models.Signal, error)
 }

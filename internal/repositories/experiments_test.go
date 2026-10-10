@@ -17,9 +17,10 @@ func TestExperimentsRepository_Find_Success(t *testing.T) {
 
 	expectedExperiments := []*models.Experiment{
 		{
-			ID:         1,
-			Experiment: "Tech Momentum",
-			Status:     "ACTIVE",
+			ID:     1,
+			Name:   "Tech Momentum",
+			Status: "ACTIVE",
+			Assets: models.NewJsonColumn([]string{"AAPL", "MSFT"}),
 		},
 	}
 
@@ -56,13 +57,10 @@ func TestExperimentsRepository_FindByID_Success(t *testing.T) {
 	repo := NewExperimentsRepository(mockDb)
 
 	baseExp := models.Experiment{
-		ID:         1,
-		Experiment: "Tech Momentum",
-		Status:     "ACTIVE",
-	}
-
-	expectedAssets := []*models.ExperimentAsset{
-		{ID: 1, ExperimentID: 1, AssetID: 100, Status: "ACTIVE"},
+		ID:     1,
+		Name:   "Tech Momentum",
+		Status: "ACTIVE",
+		Assets: models.NewJsonColumn([]string{"AAPL", "MSFT"}),
 	}
 
 	expectedVariants := []*models.Variant{
@@ -70,7 +68,7 @@ func TestExperimentsRepository_FindByID_Success(t *testing.T) {
 			ID:           1,
 			ExperimentID: 1,
 			StrategyID:   10,
-			Variant:      "Variant A",
+			Name:         "Variant A",
 			StrategyName: "Fifty Day Avg",
 			Class:        "fifty_day_avg",
 		},
@@ -81,14 +79,6 @@ func TestExperimentsRepository_FindByID_Success(t *testing.T) {
 		RunAndReturn(func(query string, dest any, args ...any) error {
 			ptr := dest.(*models.Experiment)
 			*ptr = baseExp
-			return nil
-		})
-
-	mockDb.EXPECT().
-		QueryAll("CALL sp_find_experiment_assets (?)", mock.AnythingOfType("*[]*models.ExperimentAsset"), []any{1}).
-		RunAndReturn(func(query string, dest any, args ...any) error {
-			ptr := dest.(*[]*models.ExperimentAsset)
-			*ptr = expectedAssets
 			return nil
 		})
 
@@ -105,7 +95,7 @@ func TestExperimentsRepository_FindByID_Success(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, result)
 	assert.Equal(t, 1, result.ID)
-	assert.Equal(t, expectedAssets, result.Assets)
+	assert.Equal(t, []string{"AAPL", "MSFT"}, result.GetAssets())
 	assert.Equal(t, expectedVariants, result.Variants)
 }
 
@@ -114,9 +104,21 @@ func TestExperimentsRepository_FindByExperiment_Success(t *testing.T) {
 	repo := NewExperimentsRepository(mockDb)
 
 	baseExp := models.Experiment{
-		ID:         1,
-		Experiment: "Tech Momentum",
-		Status:     "ACTIVE",
+		ID:     1,
+		Name:   "Tech Momentum",
+		Status: "ACTIVE",
+		Assets: models.NewJsonColumn([]string{"AAPL"}),
+	}
+
+	expectedVariants := []*models.Variant{
+		{
+			ID:           1,
+			ExperimentID: 1,
+			StrategyID:   10,
+			Name:         "Variant A",
+			StrategyName: "Fifty Day Avg",
+			Class:        "fifty_day_avg",
+		},
 	}
 
 	mockDb.EXPECT().
@@ -128,16 +130,17 @@ func TestExperimentsRepository_FindByExperiment_Success(t *testing.T) {
 		})
 
 	mockDb.EXPECT().
-		QueryAll("CALL sp_find_experiment_assets (?)", mock.AnythingOfType("*[]*models.ExperimentAsset"), []any{1}).
-		Return(nil)
-
-	mockDb.EXPECT().
 		QueryAll("CALL sp_find_variants_by_experiment (?)", mock.AnythingOfType("*[]*models.Variant"), []any{1}).
-		Return(nil)
+		RunAndReturn(func(query string, dest any, args ...any) error {
+			ptr := dest.(*[]*models.Variant)
+			*ptr = expectedVariants
+			return nil
+		})
 
 	result, err := repo.FindByExperiment("Tech Momentum")
 
 	assert.NoError(t, err)
 	assert.NotNil(t, result)
-	assert.Equal(t, "Tech Momentum", result.Experiment)
+	assert.Equal(t, 1, result.ID)
+	assert.Equal(t, expectedVariants, result.Variants)
 }

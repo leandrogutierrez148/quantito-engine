@@ -13,6 +13,7 @@ import (
 
 func TestExecutionService_Execute_Success(t *testing.T) {
 	mockExperimentsRepo := mocks.NewMockIExperimentsRepository(t)
+	mockExecutionsRepo := mocks.NewMockIExecutionsRepository(t)
 	mockSignalsRepo := mocks.NewMockISignalsRepository(t)
 	mockStrategyFactory := mocks.NewMockIStrategyFactory(t)
 	mockSignalDispatcher := mocks.NewMockISignalDispatcher(t)
@@ -21,6 +22,7 @@ func TestExecutionService_Execute_Success(t *testing.T) {
 
 	service := services.NewExecutionService(
 		mockExperimentsRepo,
+		mockExecutionsRepo,
 		mockSignalsRepo,
 		mockStrategyFactory,
 		mockSignalDispatcher,
@@ -28,22 +30,22 @@ func TestExecutionService_Execute_Success(t *testing.T) {
 	)
 
 	experimentID := 1
-	assetID := 101
+	asset := "AAPL"
 	variantID := 10
+	executionID := 100
+	executionVariantID := 200
 
 	hydratedExperiment := &models.Experiment{
-		ID:         experimentID,
-		Experiment: "Tech_Momentum",
-		Status:     "ACTIVE",
-		Assets: []*models.ExperimentAsset{
-			{ID: 1, ExperimentID: experimentID, AssetID: assetID, Status: "ACTIVE"},
-		},
+		ID:     experimentID,
+		Name:   "Tech_Momentum",
+		Status: "ACTIVE",
+		Assets: models.NewJsonColumn([]string{asset}),
 		Variants: []*models.Variant{
 			{
 				ID:           variantID,
 				ExperimentID: experimentID,
 				StrategyID:   100,
-				Variant:      "A",
+				Name:         "Variant A",
 				StrategyName: "Fifty Day Avg",
 				Class:        "fifty_day_avg",
 				Params:       models.NewJsonColumn(map[string]any{"threshold": 0.05}),
@@ -52,24 +54,46 @@ func TestExecutionService_Execute_Success(t *testing.T) {
 	}
 
 	mockExperimentsRepo.EXPECT().FindByID(experimentID).Return(hydratedExperiment, nil)
-	mockExecutionMutex.EXPECT().Lock(experimentID, variantID, assetID).Return()
-	mockExecutionMutex.EXPECT().Unlock(experimentID, variantID, assetID).Return()
+	mockExecutionsRepo.EXPECT().CreateExecution(experimentID, "MANUAL", "system", mock.AnythingOfType("time.Time")).Return(&models.Execution{
+		ID:           executionID,
+		ExperimentID: experimentID,
+		Status:       "RUNNING",
+	}, nil)
+
+	mockExecutionsRepo.EXPECT().CreateExecutionVariant(executionID, variantID).Return(&models.ExecutionVariant{
+		ID:          executionVariantID,
+		ExecutionID: executionID,
+		VariantID:   variantID,
+		Status:      "RUNNING",
+	}, nil)
+
+	mockExecutionMutex.EXPECT().Lock(experimentID, variantID, asset).Return()
+	mockExecutionMutex.EXPECT().Unlock(experimentID, variantID, asset).Return()
 
 	mockStrategyFactory.EXPECT().CreateStrategy("fifty_day_avg").Return(mockStrategy, nil)
 
-	expectedSignal := models.NewSignal(assetID, models.SignalBuy, 150.0, "fifty_day_avg")
-	mockStrategy.EXPECT().GenerateSignal(assetID, mock.AnythingOfType("map[string]interface {}")).Return(expectedSignal, nil)
+	expectedSignal := models.NewSignal(asset, models.SignalBuy, 150.0, "fifty_day_avg")
+	mockStrategy.EXPECT().GenerateSignal(asset, mock.AnythingOfType("map[string]interface {}")).Return(expectedSignal, nil)
 
-	mockSignalsRepo.EXPECT().Save(assetID, variantID, expectedSignal).Return(&models.SignalRecord{
-		ID:           55,
-		VariantID:    variantID,
-		ExperimentID: experimentID,
-		AssetID:      assetID,
-		Signal:       models.SignalBuy,
-		Price:        150.0,
+	mockSignalsRepo.EXPECT().Save(executionVariantID, asset, expectedSignal).Return(&models.SignalRecord{
+		ID:                 55,
+		ExecutionVariantID: executionVariantID,
+		Asset:              asset,
+		Signal:             models.SignalBuy,
+		Price:              150.0,
 	}, nil)
 
 	mockSignalDispatcher.EXPECT().Dispatch(expectedSignal).Return(nil)
+
+	mockExecutionsRepo.EXPECT().UpdateExecutionVariant(executionVariantID, "COMPLETED", 1, mock.AnythingOfType("int"), models.Nullable[string]{}).Return(&models.ExecutionVariant{
+		ID:     executionVariantID,
+		Status: "COMPLETED",
+	}, nil)
+
+	mockExecutionsRepo.EXPECT().UpdateExecution(executionID, "COMPLETED", models.Nullable[string]{}).Return(&models.Execution{
+		ID:     executionID,
+		Status: "COMPLETED",
+	}, nil)
 
 	err := service.Execute(experimentID)
 	assert.NoError(t, err)
@@ -77,6 +101,7 @@ func TestExecutionService_Execute_Success(t *testing.T) {
 
 func TestExecutionService_Execute_InactiveExperiment(t *testing.T) {
 	mockExperimentsRepo := mocks.NewMockIExperimentsRepository(t)
+	mockExecutionsRepo := mocks.NewMockIExecutionsRepository(t)
 	mockSignalsRepo := mocks.NewMockISignalsRepository(t)
 	mockStrategyFactory := mocks.NewMockIStrategyFactory(t)
 	mockSignalDispatcher := mocks.NewMockISignalDispatcher(t)
@@ -84,6 +109,7 @@ func TestExecutionService_Execute_InactiveExperiment(t *testing.T) {
 
 	service := services.NewExecutionService(
 		mockExperimentsRepo,
+		mockExecutionsRepo,
 		mockSignalsRepo,
 		mockStrategyFactory,
 		mockSignalDispatcher,
@@ -92,9 +118,9 @@ func TestExecutionService_Execute_InactiveExperiment(t *testing.T) {
 
 	experimentID := 999
 	mockExperimentsRepo.EXPECT().FindByID(experimentID).Return(&models.Experiment{
-		ID:         experimentID,
-		Experiment: "Paused_Exp",
-		Status:     "PAUSED",
+		ID:     experimentID,
+		Name:   "Paused_Exp",
+		Status: "PAUSED",
 	}, nil)
 
 	err := service.Execute(experimentID)
@@ -103,6 +129,7 @@ func TestExecutionService_Execute_InactiveExperiment(t *testing.T) {
 
 func TestExecutionService_Execute_ExperimentNotFoundOrError(t *testing.T) {
 	mockExperimentsRepo := mocks.NewMockIExperimentsRepository(t)
+	mockExecutionsRepo := mocks.NewMockIExecutionsRepository(t)
 	mockSignalsRepo := mocks.NewMockISignalsRepository(t)
 	mockStrategyFactory := mocks.NewMockIStrategyFactory(t)
 	mockSignalDispatcher := mocks.NewMockISignalDispatcher(t)
@@ -110,6 +137,7 @@ func TestExecutionService_Execute_ExperimentNotFoundOrError(t *testing.T) {
 
 	service := services.NewExecutionService(
 		mockExperimentsRepo,
+		mockExecutionsRepo,
 		mockSignalsRepo,
 		mockStrategyFactory,
 		mockSignalDispatcher,

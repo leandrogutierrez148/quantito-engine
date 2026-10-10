@@ -29,11 +29,6 @@ func (r *experimentsRepository) FindByID(experimentID int) (*models.Experiment, 
 		return nil, err
 	}
 
-	err = r.db.QueryAll("CALL sp_find_experiment_assets (?)", &experiment.Assets, experimentID)
-	if err != nil {
-		return nil, err
-	}
-
 	err = r.db.QueryAll("CALL sp_find_variants_by_experiment (?)", &experiment.Variants, experimentID)
 	if err != nil {
 		return nil, err
@@ -45,11 +40,6 @@ func (r *experimentsRepository) FindByID(experimentID int) (*models.Experiment, 
 func (r *experimentsRepository) FindByExperiment(experimentName string) (*models.Experiment, error) {
 	var experiment models.Experiment
 	err := r.db.QueryOne("CALL sp_get_experiment_by_name (?)", &experiment, experimentName)
-	if err != nil {
-		return nil, err
-	}
-
-	err = r.db.QueryAll("CALL sp_find_experiment_assets (?)", &experiment.Assets, experiment.ID)
 	if err != nil {
 		return nil, err
 	}

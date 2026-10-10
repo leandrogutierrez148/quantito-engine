@@ -51,11 +51,12 @@ func (s *capturingSignalSink) GetSignals() []*models.Signal {
 	return copied
 }
 
-func setupIntegrationApp(t *testing.T) (*echo.Echo, interfaces.IExperimentsRepository, interfaces.ISignalsRepository, *capturingSignalSink, interfaces.IDBHandler) {
+func setupIntegrationApp(t *testing.T) (*echo.Echo, interfaces.IExperimentsRepository, interfaces.IExecutionsRepository, interfaces.ISignalsRepository, *capturingSignalSink, interfaces.IDBHandler) {
 	dbHandler := testdb.NewTestDBHandler(t)
 	testdb.CleanSignalsTable(t, dbHandler)
 
 	experimentsRepo := repositories.NewExperimentsRepository(dbHandler)
+	executionsRepo := repositories.NewExecutionsRepository(dbHandler)
 	signalsRepo := repositories.NewSignalsRepository(dbHandler)
 
 	strategyFactory := strategies.NewStrategyFactory()
@@ -66,6 +67,7 @@ func setupIntegrationApp(t *testing.T) (*echo.Echo, interfaces.IExperimentsRepos
 
 	executionService := services.NewExecutionService(
 		experimentsRepo,
+		executionsRepo,
 		signalsRepo,
 		strategyFactory,
 		signalDispatcher,
@@ -76,15 +78,15 @@ func setupIntegrationApp(t *testing.T) (*echo.Echo, interfaces.IExperimentsRepos
 	router := echo.New()
 	router.POST("/execute/:id", controller.Execute)
 
-	return router, experimentsRepo, signalsRepo, capturingSink, dbHandler
+	return router, experimentsRepo, executionsRepo, signalsRepo, capturingSink, dbHandler
 }
 
 func TestIntegration_ExecuteExperiment_Success(t *testing.T) {
-	router, _, signalsRepo, capturingSink, dbHandler := setupIntegrationApp(t)
+	router, _, _, signalsRepo, capturingSink, dbHandler := setupIntegrationApp(t)
 	defer testdb.CleanSignalsTable(t, dbHandler)
 
 	// 1. Perform HTTP request to execute Experiment #1
-	// Experiment 1 has 3 Assets (101, 102, 103) and 2 Variants (50-day SMA, Price Momentum) in MySQL
+	// Experiment 1 has 3 Assets ("AAPL", "MSFT", "NVDA") and 2 Variants (50-day SMA, Price Momentum) in MySQL
 	req := httptest.NewRequest(http.MethodPost, "/execute/1", nil)
 	rec := httptest.NewRecorder()
 
@@ -97,38 +99,38 @@ func TestIntegration_ExecuteExperiment_Success(t *testing.T) {
 	signals := capturingSink.GetSignals()
 	require.Len(t, signals, 6, "Expected 6 signals generated (3 assets x 2 strategies)")
 
-	// Group signals by AssetID
-	signalsByAsset := make(map[int][]*models.Signal)
+	// Group signals by Asset
+	signalsByAsset := make(map[string][]*models.Signal)
 	for _, s := range signals {
-		signalsByAsset[s.AssetID] = append(signalsByAsset[s.AssetID], s)
+		signalsByAsset[s.Asset] = append(signalsByAsset[s.Asset], s)
 		assert.Contains(t, []models.SignalType{models.SignalBuy, models.SignalHold, models.SignalSell}, s.Type)
 		assert.Greater(t, s.Price, 0.0)
 		assert.NotEmpty(t, s.StrategyName)
 		assert.False(t, s.Timestamp.IsZero())
 	}
 
-	// Verify all 3 assets (101, 102, 103) were evaluated with 2 signals each
-	assert.Len(t, signalsByAsset[101], 2, "Asset 101 should have 2 signals (one per strategy)")
-	assert.Len(t, signalsByAsset[102], 2, "Asset 102 should have 2 signals (one per strategy)")
-	assert.Len(t, signalsByAsset[103], 2, "Asset 103 should have 2 signals (one per strategy)")
+	// Verify all 3 assets ("AAPL", "MSFT", "NVDA") were evaluated with 2 signals each
+	assert.Len(t, signalsByAsset["AAPL"], 2, "AAPL should have 2 signals (one per strategy)")
+	assert.Len(t, signalsByAsset["MSFT"], 2, "MSFT should have 2 signals (one per strategy)")
+	assert.Len(t, signalsByAsset["NVDA"], 2, "NVDA should have 2 signals (one per strategy)")
 
 	// 4. Verify historical persistence in real MySQL database via signalsRepo
 	noDate := models.Nullable[time.Time]{}
-	persistedSignals101, err := signalsRepo.Find(101, noDate, noDate)
+	persistedSignalsAAPL, err := signalsRepo.FindByAsset("AAPL", noDate, noDate)
 	require.NoError(t, err)
-	assert.Len(t, persistedSignals101, 2, "Expected 2 records persisted in signals table for Asset 101")
+	assert.Len(t, persistedSignalsAAPL, 2, "Expected 2 records persisted in signals table for AAPL")
 
-	persistedSignals102, err := signalsRepo.Find(102, noDate, noDate)
+	persistedSignalsMSFT, err := signalsRepo.FindByAsset("MSFT", noDate, noDate)
 	require.NoError(t, err)
-	assert.Len(t, persistedSignals102, 2, "Expected 2 records persisted in signals table for Asset 102")
+	assert.Len(t, persistedSignalsMSFT, 2, "Expected 2 records persisted in signals table for MSFT")
 
-	persistedSignals103, err := signalsRepo.Find(103, noDate, noDate)
+	persistedSignalsNVDA, err := signalsRepo.FindByAsset("NVDA", noDate, noDate)
 	require.NoError(t, err)
-	assert.Len(t, persistedSignals103, 2, "Expected 2 records persisted in signals table for Asset 103")
+	assert.Len(t, persistedSignalsNVDA, 2, "Expected 2 records persisted in signals table for NVDA")
 }
 
 func TestIntegration_ExecuteExperiment_Inactive(t *testing.T) {
-	router, _, signalsRepo, capturingSink, dbHandler := setupIntegrationApp(t)
+	router, _, _, signalsRepo, capturingSink, dbHandler := setupIntegrationApp(t)
 	defer testdb.CleanSignalsTable(t, dbHandler)
 
 	// Execute Experiment #2 which is PAUSED in MySQL seed data
@@ -142,13 +144,13 @@ func TestIntegration_ExecuteExperiment_Inactive(t *testing.T) {
 	assert.Empty(t, capturingSink.GetSignals(), "No signals should be emitted for inactive experiment")
 
 	noDate := models.Nullable[time.Time]{}
-	persistedSignals, err := signalsRepo.Find(201, noDate, noDate)
+	persistedSignals, err := signalsRepo.FindByAsset("BTC-USD", noDate, noDate)
 	require.NoError(t, err)
 	assert.Empty(t, persistedSignals, "No records should be persisted for inactive experiment")
 }
 
 func TestIntegration_ExecuteExperiment_NotFound(t *testing.T) {
-	router, _, _, _, dbHandler := setupIntegrationApp(t)
+	router, _, _, _, _, dbHandler := setupIntegrationApp(t)
 	defer testdb.CleanSignalsTable(t, dbHandler)
 
 	// Execute non-existent experiment
@@ -162,7 +164,7 @@ func TestIntegration_ExecuteExperiment_NotFound(t *testing.T) {
 }
 
 func TestIntegration_ExecuteExperiment_InvalidIDParam(t *testing.T) {
-	router, _, _, _, dbHandler := setupIntegrationApp(t)
+	router, _, _, _, _, dbHandler := setupIntegrationApp(t)
 	defer testdb.CleanSignalsTable(t, dbHandler)
 
 	// Execute with non-integer parameter
