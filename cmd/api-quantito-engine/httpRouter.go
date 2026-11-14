@@ -1,8 +1,6 @@
 package main
 
 import (
-	"os"
-
 	"quantito-engine/internal/controllers"
 	"quantito-engine/internal/infraestructures"
 	"quantito-engine/internal/repositories"
@@ -43,13 +41,8 @@ func initRoutes(router *echo.Echo, conf *Config) {
 	executionsRepo := repositories.NewExecutionsRepository(dbHandler)
 	signalsRepo := repositories.NewSignalsRepository(dbHandler)
 
-	quantitoUrl := os.Getenv("QUANTITO_API_URL")
-	if quantitoUrl == "" {
-		quantitoUrl = "http://localhost:8081"
-	}
-	quantitoApiClient := infraestructures.NewAPIClient(quantitoUrl, nil)
-
-	strategyFactory := strategies.NewStrategyFactory(quantitoApiClient)
+	apiClient := infraestructures.NewAPIClient("", nil)
+	strategyFactory := strategies.NewStrategyFactory(apiClient)
 	consoleSink := sinks.NewConsoleSink()
 	signalDispatcher := sinks.NewSignalDispatcher(consoleSink)
 	executionMutex := infraestructures.NewExecutionMutex()

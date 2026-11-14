@@ -99,7 +99,7 @@ func (e *ExecutionService) runExecution(experiment *models.Experiment, execution
 		}
 
 		start := time.Now()
-		signalsCount, evalErr := e.evaluateVariantAcrossAssets(ev.ID, experiment.ID, variant, assets)
+		signalsCount, evalErr := e.evaluateVariantAcrossAssets(ev.ID, experiment, variant, assets)
 		durationMs := int(time.Since(start).Milliseconds())
 
 		if evalErr != nil {
@@ -142,7 +142,8 @@ func (e *ExecutionService) runExecution(experiment *models.Experiment, execution
 	return nil
 }
 
-func (e *ExecutionService) evaluateVariantAcrossAssets(executionVariantID, experimentID int, variant *models.Variant, assets []string) (int, error) {
+func (e *ExecutionService) evaluateVariantAcrossAssets(executionVariantID int, experiment *models.Experiment, variant *models.Variant, assets []string) (int, error) {
+	experimentID := experiment.ID
 	variantID := variant.ID
 	strategy, err := e.strategyFactory.CreateStrategy(variant.Class)
 	if err != nil {
@@ -150,8 +151,15 @@ func (e *ExecutionService) evaluateVariantAcrossAssets(executionVariantID, exper
 	}
 
 	params := make(map[string]any)
+	if experiment.Params.Get() != nil {
+		for k, v := range *experiment.Params.Get() {
+			params[k] = v
+		}
+	}
 	if variant.Params.Get() != nil {
-		params = *variant.Params.Get()
+		for k, v := range *variant.Params.Get() {
+			params[k] = v
+		}
 	}
 
 	signalsEmitted := 0

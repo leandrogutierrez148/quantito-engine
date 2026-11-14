@@ -2,7 +2,7 @@ package strategies
 
 import (
 	"fmt"
-	"os"
+	"net/url"
 	"time"
 
 	"quantito-engine/internal/infraestructures"
@@ -35,18 +35,9 @@ type FiftyDayAvgStrategy struct {
 	apiClient interfaces.IAPIClient
 }
 
-func NewFiftyDayAvgStrategy(apiClient ...interfaces.IAPIClient) interfaces.IStrategy {
-	if len(apiClient) > 0 && apiClient[0] != nil {
-		return &FiftyDayAvgStrategy{apiClient: apiClient[0]}
-	}
-
-	baseUrl := os.Getenv("QUANTITO_API_URL")
-	if baseUrl == "" {
-		baseUrl = "http://localhost:8081"
-	}
-
+func NewFiftyDayAvgStrategy(apiClient interfaces.IAPIClient) interfaces.IStrategy {
 	return &FiftyDayAvgStrategy{
-		apiClient: infraestructures.NewAPIClient(baseUrl, nil),
+		apiClient: apiClient,
 	}
 }
 
@@ -115,9 +106,16 @@ func (s *FiftyDayAvgStrategy) GenerateSignal(asset string, params map[string]any
 		},
 	}
 
+	endpoint := "/api/v1/strategies/fifty_day_avg/evaluate"
+	if apiURL, ok := params["api_url"].(string); ok && apiURL != "" {
+		if joined, joinErr := url.JoinPath(apiURL, endpoint); joinErr == nil {
+			endpoint = joined
+		}
+	}
+
 	var evalResp QuantitoEvaluateResponse
 	err := s.apiClient.Post(
-		"/api/v1/strategies/fifty_day_avg/evaluate",
+		endpoint,
 		&evalResp,
 		infraestructures.RequestJsonBody(req),
 	)
