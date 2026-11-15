@@ -3,11 +3,11 @@
 -- Engine: InnoDB | Character Set: utf8mb4 | Collation: utf8mb4_unicode_ci
 -- ============================================================================
 
-CREATE DATABASE IF NOT EXISTS `quantito-engine`
+CREATE DATABASE IF NOT EXISTS `quantito_engine`
   DEFAULT CHARACTER SET utf8mb4
   DEFAULT COLLATE utf8mb4_unicode_ci;
 
-USE `quantito-engine`;
+USE `quantito_engine`;
 
 SET FOREIGN_KEY_CHECKS = 0;
 DROP TABLE IF EXISTS `signals`;

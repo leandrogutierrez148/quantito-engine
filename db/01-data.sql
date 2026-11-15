@@ -1,9 +1,9 @@
 -- ============================================================================
 -- QUANTITO ENGINE - Initial Execution Setup Data
--- Database: quantito-engine
+-- Database: quantito_engine
 -- ============================================================================
 
-USE `quantito-engine`;
+USE `quantito_engine`;
 
 -- Disable foreign key checks during batch insert
 SET FOREIGN_KEY_CHECKS = 0;

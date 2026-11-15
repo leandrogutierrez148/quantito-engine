@@ -3,7 +3,7 @@ listen = ":8080"
 
 [database]
 host = "mysql:3306"
-schema = "quantito-engine"
+schema = "quantito_engine"
 username = "quantito_user"
 password = "quantito_password"
 maxOpenConn = 10

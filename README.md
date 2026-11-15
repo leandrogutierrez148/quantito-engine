@@ -90,7 +90,7 @@ quantito_url = "http://localhost:8081"   # Base URL of quantito FastAPI service
 # Database connection
 [database]
 host = "localhost:3306"
-schema = "quantito-engine"
+schema = "quantito_engine"
 username = "quantito_user"
 password = "quantito_password"
 
@@ -107,7 +107,7 @@ logger = "console"                      # "console" | "split-json" | "json"
 | `API_LISTEN` | HTTP port for Echo server | `:8080` |
 | `QUANTITO_API_URL` | Base URL for `quantito` strategy service | `http://localhost:8081` |
 | `DB_HOST` | MySQL hostname and port | `localhost:3306` |
-| `DB_SCHEMA` | MySQL schema name | `quantito-engine` |
+| `DB_SCHEMA` | MySQL schema name | `quantito_engine` |
 | `DB_USER` | MySQL user | `quantito_user` |
 | `DB_PASSWORD` | MySQL password | `quantito_password` |
 | `LOG_LEVEL` | Logging verbosity | `debug` |
