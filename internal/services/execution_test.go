@@ -39,12 +39,13 @@ func TestExecutionService_Execute_Success(t *testing.T) {
 		ID:     experimentID,
 		Name:   "Tech_Momentum",
 		Status: "ACTIVE",
-		Assets: models.NewJsonColumn([]string{asset}),
 		Variants: []*models.Variant{
 			{
 				ID:           variantID,
 				ExperimentID: experimentID,
 				StrategyID:   100,
+				AssetID:      1,
+				Asset:        asset,
 				Name:         "Variant A",
 				StrategyName: "Fifty Day Avg",
 				Class:        "fifty_day_avg",
@@ -60,10 +61,11 @@ func TestExecutionService_Execute_Success(t *testing.T) {
 		Status:       "RUNNING",
 	}, nil)
 
-	mockExecutionsRepo.EXPECT().CreateExecutionVariant(executionID, variantID).Return(&models.ExecutionVariant{
+	mockExecutionsRepo.EXPECT().CreateExecutionVariant(executionID, variantID, map[string]any{"threshold": 0.05}).Return(&models.ExecutionVariant{
 		ID:          executionVariantID,
 		ExecutionID: executionID,
 		VariantID:   variantID,
+		Params:      models.NewJsonColumn(map[string]any{"threshold": 0.05}),
 		Status:      "RUNNING",
 	}, nil)
 
@@ -85,7 +87,7 @@ func TestExecutionService_Execute_Success(t *testing.T) {
 
 	mockSignalDispatcher.EXPECT().Dispatch(expectedSignal).Return(nil)
 
-	mockExecutionsRepo.EXPECT().UpdateExecutionVariant(executionVariantID, "COMPLETED", 1, mock.AnythingOfType("int"), models.Nullable[string]{}).Return(&models.ExecutionVariant{
+	mockExecutionsRepo.EXPECT().UpdateExecutionVariant(executionVariantID, "COMPLETED", mock.AnythingOfType("int"), models.Nullable[string]{}).Return(&models.ExecutionVariant{
 		ID:     executionVariantID,
 		Status: "COMPLETED",
 	}, nil)

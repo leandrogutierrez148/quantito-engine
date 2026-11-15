@@ -1,6 +1,7 @@
 package repositories
 
 import (
+	"encoding/json"
 	"quantito-engine/internal/interfaces"
 	"quantito-engine/internal/models"
 	"time"
@@ -50,13 +51,23 @@ func (r *executionsRepository) UpdateExecution(executionID int, status string, e
 	return &exec, nil
 }
 
-func (r *executionsRepository) CreateExecutionVariant(executionID, variantID int) (*models.ExecutionVariant, error) {
+func (r *executionsRepository) CreateExecutionVariant(executionID, variantID int, params map[string]any) (*models.ExecutionVariant, error) {
 	var ev models.ExecutionVariant
+	var paramsJSON any
+	if params != nil {
+		b, err := json.Marshal(params)
+		if err != nil {
+			return nil, err
+		}
+		paramsJSON = string(b)
+	}
+
 	err := r.db.QueryOne(
-		"CALL sp_create_execution_variant (?, ?)",
+		"CALL sp_create_execution_variant (?, ?, ?)",
 		&ev,
 		executionID,
 		variantID,
+		paramsJSON,
 	)
 	if err != nil {
 		return nil, err
@@ -64,7 +75,7 @@ func (r *executionsRepository) CreateExecutionVariant(executionID, variantID int
 	return &ev, nil
 }
 
-func (r *executionsRepository) UpdateExecutionVariant(id int, status string, signalsCount, durationMs int, errorMessage models.Nullable[string]) (*models.ExecutionVariant, error) {
+func (r *executionsRepository) UpdateExecutionVariant(id int, status string, durationMs int, errorMessage models.Nullable[string]) (*models.ExecutionVariant, error) {
 	var ev models.ExecutionVariant
 	var errVal any
 	if errorMessage.Valid {
@@ -72,11 +83,10 @@ func (r *executionsRepository) UpdateExecutionVariant(id int, status string, sig
 	}
 
 	err := r.db.QueryOne(
-		"CALL sp_update_execution_variant (?, ?, ?, ?, ?)",
+		"CALL sp_update_execution_variant (?, ?, ?, ?)",
 		&ev,
 		id,
 		status,
-		signalsCount,
 		durationMs,
 		errVal,
 	)
@@ -98,7 +108,7 @@ func (r *executionsRepository) FindByID(executionID int) (*models.Execution, err
 	}
 
 	err = r.db.QueryAll(
-		"SELECT id, execution_id, variant_id, status, signals_count, duration_ms, error_message, started_at, completed_at, created_at, updated_at FROM execution_variants WHERE execution_id = ?",
+		"SELECT id, execution_id, variant_id, params, status, duration_ms, error_message, started_at, completed_at, created_at, updated_at FROM execution_variants WHERE execution_id = ?",
 		&exec.Variants,
 		executionID,
 	)

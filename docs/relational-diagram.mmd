@@ -1,77 +1,104 @@
 erDiagram
-    %% Tablas Existentes
-    EXPERIMENTS ||--o{ VARIANTS : "1:N"
-    EXPERIMENTS ||--o{ SIGNALS : "1:N"
-    VARIANTS ||--o{ SIGNALS : "1:N"
+    %% Relaciones de Especificación, Activos y Configuración
+    EXPERIMENTS ||--o{ VARIANTS : "1:N (configura)"
+    STRATEGIES ||--o{ VARIANTS : "1:N (define algoritmo)"
+    ASSETS ||--o{ VARIANTS : "1:N (asigna instrumento)"
 
-    %% Nuevas Tablas de Broker
-    BROKERS ||--o{ BROKER_ACCOUNTS : "1:N (proporciona)"
-    BROKER_ACCOUNTS ||--o{ EXPERIMENT_BROKERS : "1:N (asignada a)"
-    EXPERIMENTS ||--o{ EXPERIMENT_BROKERS : "1:N (opera con)"
-    
-    %% Ejecución y Órdenes
-    BROKER_ACCOUNTS ||--o{ ORDERS : "1:N (ejecuta en)"
-    SIGNALS ||--o{ ORDERS : "1:N (genera)"
-    ORDERS ||--o{ ORDER_EXECUTIONS : "1:N (registra fills)"
+    %% Relaciones de Ciclo de Vida de Ejecución y Señales
+    EXPERIMENTS ||--o{ EXECUTIONS : "1:N (ejecuta corridas)"
+    EXECUTIONS ||--o{ EXECUTION_VARIANTS : "1:N (desglosa por variante)"
+    VARIANTS ||--o{ EXECUTION_VARIANTS : "1:N (congela snapshot y evalúa)"
+    EXECUTION_VARIANTS ||--o{ SIGNALS : "1:1..N (emite señal)"
 
-    BROKERS {
+    ASSETS {
         int_unsigned id PK
-        varchar code UK "ALPACA, IBKR, BINANCE, PAPER"
-        varchar name "Alpaca Securities, etc."
-        varchar adapter_class "Nombre del adaptador en Go"
+        varchar symbol UK "AAPL, MSFT, NVDA, BTCUSDT"
+        varchar name "Apple Inc., Bitcoin Tether Spot, etc."
+        varchar asset_type "EQUITY, ETF, CRYPTO, FOREX"
+        varchar exchange "NASDAQ, NYSE_ARCA, BINANCE"
+        varchar currency "USD, USDT"
         varchar status "ACTIVE, INACTIVE"
         datetime created_at
+        datetime updated_at
     }
 
-    BROKER_ACCOUNTS {
+    EXPERIMENTS {
         int_unsigned id PK
-        int_unsigned broker_id FK "REFERENCES brokers(id)"
-        varchar name "Paper Account 1 / Live Fund A"
-        varchar environment "PAPER, LIVE, BACKTEST"
-        varchar account_number "Número de cuenta en broker"
-        varchar currency "USD, EUR, USDT"
-        json credentials_ref "Ref a Vault / SecretManager o key cifrada"
-        json config "Parámetros (max_position_size, leverage, etc.)"
-        varchar status "ACTIVE, DISABLED"
+        varchar name "Nombre del experimento"
+        varchar description "Descripción opcional"
+        varchar status "DRAFT, ACTIVE, PAUSED, COMPLETED"
+        varchar execution_mode "BACKTEST, PAPER, LIVE"
+        datetime start_date
+        datetime end_date
+        varchar frequency "15m, 1h, 2h, 1d"
+        decimal max_capital "Capital máximo asignado (18,4)"
+        varchar currency "USD, USDT"
+        json params "Configuración opcional (benchmark, slippage, etc.)"
+        text notes
         datetime created_at
         datetime updated_at
     }
 
-    EXPERIMENT_BROKERS {
+    STRATEGIES {
         int_unsigned id PK
-        int_unsigned experiment_id FK "REFERENCES experiments(id)"
-        int_unsigned broker_account_id FK "REFERENCES broker_accounts(id)"
-        decimal allocation_pct "Porcentaje de capital asignado (0.0 a 1.0)"
-        varchar order_type_default "MARKET, LIMIT"
-        varchar status "ACTIVE, PAUSED"
-        datetime created_at
-    }
-
-    ORDERS {
-        int_unsigned id PK
-        int_unsigned broker_account_id FK "REFERENCES broker_accounts(id)"
-        int_unsigned signal_id FK "REFERENCES signals(id)"
-        int_unsigned asset_id "ID del activo operado"
-        varchar broker_order_id "ID retornado por la API del broker"
-        varchar client_order_id UK "ID idempotente generado por Quantito"
-        varchar side "BUY, SELL"
-        varchar order_type "MARKET, LIMIT, STOP"
-        decimal requested_qty "Cantidad solicitada"
-        decimal limit_price "Precio límite (si aplica)"
-        varchar status "PENDING, SUBMITTED, FILLED, PARTIALLY_FILLED, CANCELED, REJECTED"
-        text status_message "Error o detalle devuelto por broker"
+        varchar name "Nombre legible de la estrategia"
+        varchar class "fifty_day_avg, price_momentum, clockwork_hgb"
+        json param_definitions "Especificaciones de parámetros (tipos, defaults, required)"
+        varchar status "ACTIVE, INACTIVE"
         datetime created_at
         datetime updated_at
     }
 
-    ORDER_EXECUTIONS {
+    VARIANTS {
         int_unsigned id PK
-        int_unsigned order_id FK "REFERENCES orders(id)"
-        varchar broker_execution_id "ID del fill/trade en el broker"
-        decimal executed_qty "Cantidad ejecutada"
-        decimal executed_price "Precio efectivo de llenado"
-        decimal commission "Comisión / Fee"
-        varchar commission_asset "Moneda del fee (USD, etc.)"
-        datetime executed_at "Timestamp oficial del fill"
+        int_unsigned experiment_id FK "REFERENCES experiments(id) ON DELETE CASCADE"
+        int_unsigned strategy_id FK "REFERENCES strategies(id) ON DELETE RESTRICT"
+        int_unsigned asset_id FK "REFERENCES assets(id) ON DELETE RESTRICT"
+        varchar name "Ej. AAPL - 50-Day SMA"
+        json params "Parámetros actuales de la variante (mutables en el tiempo)"
+        decimal capital_allocation_pct "Porcentaje de capital (5,4), default 1.0000"
+        varchar status "ACTIVE, INACTIVE"
+        text notes
+        datetime created_at
+        datetime updated_at
+    }
+
+    EXECUTIONS {
+        int_unsigned id PK
+        int_unsigned experiment_id FK "REFERENCES experiments(id) ON DELETE CASCADE"
+        varchar trigger_type "MANUAL, SCHEDULED, BACKTEST, WEBHOOK"
+        varchar triggered_by "Usuario o sistema que disparó la corrida"
+        datetime as_of_time "Timestamp de corte de evaluación"
+        varchar status "PENDING, RUNNING, COMPLETED, PARTIAL_SUCCESS, FAILED"
+        datetime started_at
+        datetime completed_at
+        text error_message
+        datetime created_at
+        datetime updated_at
+    }
+
+    EXECUTION_VARIANTS {
+        int_unsigned id PK
+        int_unsigned execution_id FK "REFERENCES executions(id) ON DELETE CASCADE (UK con variant_id)"
+        int_unsigned variant_id FK "REFERENCES variants(id) ON DELETE CASCADE (UK con execution_id)"
+        json params "Snapshot inmutable de params al momento de la ejecución"
+        varchar status "PENDING, RUNNING, COMPLETED, FAILED"
+        int_unsigned duration_ms "Duración de evaluación en milisegundos"
+        text error_message
+        datetime started_at
+        datetime completed_at
+        datetime created_at
+        datetime updated_at
+    }
+
+    SIGNALS {
+        int_unsigned id PK
+        int_unsigned execution_variant_id FK "REFERENCES execution_variants(id) ON DELETE CASCADE"
+        varchar asset "Ticker del activo operado (VARCHAR 20)"
+        varchar signal "BUY, HOLD, SELL"
+        decimal price "Precio de referencia (18,4)"
+        decimal confidence "Nivel de confianza (5,4), default 1.0000"
         datetime created_at
     }
+
+

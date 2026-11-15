@@ -20,7 +20,6 @@ func TestExperimentsRepository_Find_Success(t *testing.T) {
 			ID:     1,
 			Name:   "Tech Momentum",
 			Status: "ACTIVE",
-			Assets: models.NewJsonColumn([]string{"AAPL", "MSFT"}),
 		},
 	}
 
@@ -60,7 +59,6 @@ func TestExperimentsRepository_FindByID_Success(t *testing.T) {
 		ID:     1,
 		Name:   "Tech Momentum",
 		Status: "ACTIVE",
-		Assets: models.NewJsonColumn([]string{"AAPL", "MSFT"}),
 	}
 
 	expectedVariants := []*models.Variant{
@@ -68,6 +66,8 @@ func TestExperimentsRepository_FindByID_Success(t *testing.T) {
 			ID:           1,
 			ExperimentID: 1,
 			StrategyID:   10,
+			AssetID:      1,
+			Asset:        "AAPL",
 			Name:         "Variant A",
 			StrategyName: "Fifty Day Avg",
 			Class:        "fifty_day_avg",
@@ -95,7 +95,6 @@ func TestExperimentsRepository_FindByID_Success(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, result)
 	assert.Equal(t, 1, result.ID)
-	assert.Equal(t, []string{"AAPL", "MSFT"}, result.GetAssets())
 	assert.Equal(t, expectedVariants, result.Variants)
 }
 
@@ -107,7 +106,6 @@ func TestExperimentsRepository_FindByExperiment_Success(t *testing.T) {
 		ID:     1,
 		Name:   "Tech Momentum",
 		Status: "ACTIVE",
-		Assets: models.NewJsonColumn([]string{"AAPL"}),
 	}
 
 	expectedVariants := []*models.Variant{
@@ -115,6 +113,8 @@ func TestExperimentsRepository_FindByExperiment_Success(t *testing.T) {
 			ID:           1,
 			ExperimentID: 1,
 			StrategyID:   10,
+			AssetID:      1,
+			Asset:        "AAPL",
 			Name:         "Variant A",
 			StrategyName: "Fifty Day Avg",
 			Class:        "fifty_day_avg",

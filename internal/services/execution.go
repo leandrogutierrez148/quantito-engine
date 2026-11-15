@@ -56,12 +56,6 @@ func (e *ExecutionService) ExecuteWithDetails(id int, triggerType, triggeredBy s
 		return nil
 	}
 
-	assets := experiment.GetAssets()
-	if len(assets) == 0 {
-		log.Warn().Int("experimentId", experiment.ID).Msg("No assets configured for experiment")
-		return nil
-	}
-
 	if len(experiment.Variants) == 0 {
 		log.Warn().Int("experimentId", experiment.ID).Msg("No variants configured for experiment")
 		return nil
@@ -76,10 +70,10 @@ func (e *ExecutionService) ExecuteWithDetails(id int, triggerType, triggeredBy s
 		return fmt.Errorf("error creating execution for experiment %d: %w", experiment.ID, err)
 	}
 
-	return e.runExecution(experiment, execution, assets)
+	return e.runExecution(experiment, execution)
 }
 
-func (e *ExecutionService) runExecution(experiment *models.Experiment, execution *models.Execution, assets []string) error {
+func (e *ExecutionService) runExecution(experiment *models.Experiment, execution *models.Execution) error {
 	log.Info().
 		Int("experimentId", experiment.ID).
 		Int("executionId", execution.ID).
@@ -91,7 +85,9 @@ func (e *ExecutionService) runExecution(experiment *models.Experiment, execution
 	failedCount := 0
 
 	for _, variant := range experiment.Variants {
-		ev, err := e.executionsRepo.CreateExecutionVariant(execution.ID, variant.ID)
+		snapshotParams := e.mergeVariantParams(experiment, variant)
+
+		ev, err := e.executionsRepo.CreateExecutionVariant(execution.ID, variant.ID, snapshotParams)
 		if err != nil {
 			log.Error().Err(err).Int("executionId", execution.ID).Int("variantId", variant.ID).Msg("Error creating execution variant record")
 			failedCount++
@@ -99,16 +95,16 @@ func (e *ExecutionService) runExecution(experiment *models.Experiment, execution
 		}
 
 		start := time.Now()
-		signalsCount, evalErr := e.evaluateVariantAcrossAssets(ev.ID, experiment, variant, assets)
+		evalErr := e.evaluateVariant(ev.ID, experiment, variant, snapshotParams)
 		durationMs := int(time.Since(start).Milliseconds())
 
 		if evalErr != nil {
 			log.Error().Err(evalErr).Int("executionId", execution.ID).Int("variantId", variant.ID).Msg("Error evaluating variant")
 			errStr := evalErr.Error()
-			_, _ = e.executionsRepo.UpdateExecutionVariant(ev.ID, string(models.ExecutionVariantFailed), signalsCount, durationMs, models.NotNull(errStr))
+			_, _ = e.executionsRepo.UpdateExecutionVariant(ev.ID, string(models.ExecutionVariantFailed), durationMs, models.NotNull(errStr))
 			failedCount++
 		} else {
-			_, _ = e.executionsRepo.UpdateExecutionVariant(ev.ID, string(models.ExecutionVariantCompleted), signalsCount, durationMs, models.Nullable[string]{})
+			_, _ = e.executionsRepo.UpdateExecutionVariant(ev.ID, string(models.ExecutionVariantCompleted), durationMs, models.Nullable[string]{})
 			completedCount++
 		}
 	}
@@ -142,14 +138,7 @@ func (e *ExecutionService) runExecution(experiment *models.Experiment, execution
 	return nil
 }
 
-func (e *ExecutionService) evaluateVariantAcrossAssets(executionVariantID int, experiment *models.Experiment, variant *models.Variant, assets []string) (int, error) {
-	experimentID := experiment.ID
-	variantID := variant.ID
-	strategy, err := e.strategyFactory.CreateStrategy(variant.Class)
-	if err != nil {
-		return 0, fmt.Errorf("error creating strategy %s: %w", variant.Class, err)
-	}
-
+func (e *ExecutionService) mergeVariantParams(experiment *models.Experiment, variant *models.Variant) map[string]any {
 	params := make(map[string]any)
 	if experiment.Params.Get() != nil {
 		for k, v := range *experiment.Params.Get() {
@@ -161,38 +150,46 @@ func (e *ExecutionService) evaluateVariantAcrossAssets(executionVariantID int, e
 			params[k] = v
 		}
 	}
+	return params
+}
 
-	signalsEmitted := 0
-	for _, asset := range assets {
-		e.executionMutex.Lock(experimentID, variantID, asset)
-		signal, err := strategy.GenerateSignal(asset, params)
-		e.executionMutex.Unlock(experimentID, variantID, asset)
+func (e *ExecutionService) evaluateVariant(executionVariantID int, experiment *models.Experiment, variant *models.Variant, params map[string]any) error {
+	experimentID := experiment.ID
+	variantID := variant.ID
+	asset := variant.Asset
 
+	strategy, err := e.strategyFactory.CreateStrategy(variant.Class)
+	if err != nil {
+		return fmt.Errorf("error creating strategy %s: %w", variant.Class, err)
+	}
+
+	e.executionMutex.Lock(experimentID, variantID, asset)
+	signal, err := strategy.GenerateSignal(asset, params)
+	e.executionMutex.Unlock(experimentID, variantID, asset)
+
+	if err != nil {
+		return fmt.Errorf("error evaluating asset %s for variant %d: %w", asset, variantID, err)
+	}
+
+	if signal != nil {
+		log.Info().
+			Str("asset", asset).
+			Int("experimentId", experimentID).
+			Int("variantId", variantID).
+			Str("strategy", variant.Class).
+			Str("signal", string(signal.Type)).
+			Float64("price", signal.Price).
+			Msg("Strategy generated signal")
+
+		_, err = e.signalsRepo.Save(executionVariantID, asset, signal)
 		if err != nil {
-			return signalsEmitted, fmt.Errorf("error evaluating asset %s for variant %d: %w", asset, variantID, err)
+			return fmt.Errorf("error saving signal for asset %s: %w", asset, err)
 		}
 
-		if signal != nil {
-			log.Info().
-				Str("asset", asset).
-				Int("experimentId", experimentID).
-				Int("variantId", variantID).
-				Str("strategy", variant.Class).
-				Str("signal", string(signal.Type)).
-				Float64("price", signal.Price).
-				Msg("Strategy generated signal")
-
-			_, err = e.signalsRepo.Save(executionVariantID, asset, signal)
-			if err != nil {
-				return signalsEmitted, fmt.Errorf("error saving signal for asset %s: %w", asset, err)
-			}
-
-			if err := e.signalDispatcher.Dispatch(signal); err != nil {
-				log.Warn().Err(err).Str("asset", asset).Msg("Error dispatching signal")
-			}
-			signalsEmitted++
+		if err := e.signalDispatcher.Dispatch(signal); err != nil {
+			log.Warn().Err(err).Str("asset", asset).Msg("Error dispatching signal")
 		}
 	}
 
-	return signalsEmitted, nil
+	return nil
 }

@@ -12,18 +12,21 @@ classDiagram
     class IExecutionService {
         <<interface>>
         +Execute(id int) error
+        +ExecuteWithDetails(id int, triggerType string, triggeredBy string, asOfTime time.Time) error
     }
 
     class ExecutionService {
         -experimentsRepo IExperimentsRepository
+        -executionsRepo IExecutionsRepository
         -signalsRepo ISignalsRepository
         -strategyFactory IStrategyFactory
         -signalDispatcher ISignalDispatcher
         -executionMutex IExecutionMutex
         +Execute(id int) error
-        -executeExperiment(experiment *Experiment) error
-        -evaluateAssetAcrossVariants(assetID int, experimentID int, variants []*Variant) error
-        -executeVariant(assetID int, experimentID int, variant *Variant) error
+        +ExecuteWithDetails(id int, triggerType string, triggeredBy string, asOfTime time.Time) error
+        -runExecution(experiment *Experiment, execution *Execution) error
+        -mergeVariantParams(experiment *Experiment, variant *Variant) map[string]any
+        -evaluateVariant(executionVariantID int, experiment *Experiment, variant *Variant, params map[string]any) error
     }
 
     ExecutionController --> IExecutionService
@@ -38,20 +41,27 @@ classDiagram
     }
 
     class StrategyFactory {
+        -apiClient IAPIClient
         +CreateStrategy(strategyClass string) IStrategy, error
     }
 
     class IStrategy {
         <<interface>>
-        +GenerateSignal(assetID int, params map[string]any) *Signal, error
+        +GenerateSignal(asset string, params map[string]any) *Signal, error
     }
 
     class FiftyDayAvgStrategy {
-        +GenerateSignal(assetID int, params map[string]any) *Signal, error
+        -apiClient IAPIClient
+        +GenerateSignal(asset string, params map[string]any) *Signal, error
     }
 
     class PriceMomentumStrategy {
-        +GenerateSignal(assetID int, params map[string]any) *Signal, error
+        +GenerateSignal(asset string, params map[string]any) *Signal, error
+    }
+
+    class ClockworkHGBStrategy {
+        -apiClient IAPIClient
+        +GenerateSignal(asset string, params map[string]any) *Signal, error
     }
 
     ExecutionService --> IStrategyFactory
@@ -59,6 +69,7 @@ classDiagram
     StrategyFactory ..> IStrategy
     IStrategy <|.. FiftyDayAvgStrategy
     IStrategy <|.. PriceMomentumStrategy
+    IStrategy <|.. ClockworkHGBStrategy
 
     %% ==========================================
     %% LAYER: SIGNAL SINKS & DISPATCHER
@@ -98,24 +109,13 @@ classDiagram
         <<interface>>
         +Find(includeInactive bool) []*Experiment, error
         +FindByID(experimentID int) *Experiment, error
-        +FindByExperiment(experiment string) *Experiment, error
+        +FindByExperiment(experimentName string) *Experiment, error
     }
     class ExperimentsRepository {
         -db IDBHandler
         +Find(includeInactive bool) []*Experiment, error
         +FindByID(experimentID int) *Experiment, error
-        +FindByExperiment(experiment string) *Experiment, error
-    }
-
-    class IExperimentAssetsRepository {
-        <<interface>>
-        +FindByExperiment(experimentID int) []*ExperimentAsset, error
-        +FindExperimentsByAsset(assetID int) []*Experiment, error
-    }
-    class ExperimentAssetsRepository {
-        -db IDBHandler
-        +FindByExperiment(experimentID int) []*ExperimentAsset, error
-        +FindExperimentsByAsset(assetID int) []*Experiment, error
+        +FindByExperiment(experimentName string) *Experiment, error
     }
 
     class IVariantsRepository {
@@ -127,26 +127,47 @@ classDiagram
         +FindByExperiment(experimentID int) []*Variant, error
     }
 
+    class IExecutionsRepository {
+        <<interface>>
+        +CreateExecution(experimentID int, triggerType string, triggeredBy string, asOfTime time.Time) *Execution, error
+        +UpdateExecution(executionID int, status string, errorMessage Nullable~string~) *Execution, error
+        +CreateExecutionVariant(executionID int, variantID int, params map[string]any) *ExecutionVariant, error
+        +UpdateExecutionVariant(id int, status string, durationMs int, errorMessage Nullable~string~) *ExecutionVariant, error
+        +FindByID(executionID int) *Execution, error
+        +FindByExperiment(experimentID int, limit int) []*Execution, error
+    }
+    class ExecutionsRepository {
+        -db IDBHandler
+        +CreateExecution(experimentID int, triggerType string, triggeredBy string, asOfTime time.Time) *Execution, error
+        +UpdateExecution(executionID int, status string, errorMessage Nullable~string~) *Execution, error
+        +CreateExecutionVariant(executionID int, variantID int, params map[string]any) *ExecutionVariant, error
+        +UpdateExecutionVariant(id int, status string, durationMs int, errorMessage Nullable~string~) *ExecutionVariant, error
+        +FindByID(executionID int) *Execution, error
+        +FindByExperiment(experimentID int, limit int) []*Execution, error
+    }
+
     class ISignalsRepository {
         <<interface>>
-        +Save(assetID int, variantID int, signal *Signal) *SignalRecord, error
-        +Find(assetID int, fromDate Nullable~Time~, toDate Nullable~Time~) []*SignalRecord, error
+        +Save(executionVariantID int, asset string, signal *Signal) *SignalRecord, error
+        +FindByExecution(executionID int) []*SignalRecord, error
+        +FindByAsset(asset string, fromDate Nullable~Time~, toDate Nullable~Time~) []*SignalRecord, error
     }
     class SignalsRepository {
         -db IDBHandler
-        +Save(assetID int, variantID int, signal *Signal) *SignalRecord, error
-        +Find(assetID int, fromDate Nullable~Time~, toDate Nullable~Time~) []*SignalRecord, error
+        +Save(executionVariantID int, asset string, signal *Signal) *SignalRecord, error
+        +FindByExecution(executionID int) []*SignalRecord, error
+        +FindByAsset(asset string, fromDate Nullable~Time~, toDate Nullable~Time~) []*SignalRecord, error
     }
 
     class IExecutionMutex {
         <<interface>>
-        +Lock(experimentID int, variantID int, assetID int)
-        +Unlock(experimentID int, variantID int, assetID int)
+        +Lock(experimentID int, variantID int, asset string)
+        +Unlock(experimentID int, variantID int, asset string)
     }
     class ExecutionMutex {
         -mutex IKeyMutex
-        +Lock(experimentID int, variantID int, assetID int)
-        +Unlock(experimentID int, variantID int, assetID int)
+        +Lock(experimentID int, variantID int, asset string)
+        +Unlock(experimentID int, variantID int, asset string)
     }
 
     class IDBHandler {
@@ -158,49 +179,59 @@ classDiagram
     }
 
     ExecutionService --> IExperimentsRepository
+    ExecutionService --> IExecutionsRepository
     ExecutionService --> ISignalsRepository
     ExecutionService --> IExecutionMutex
 
     IExperimentsRepository <|.. ExperimentsRepository
-    IExperimentAssetsRepository <|.. ExperimentAssetsRepository
     IVariantsRepository <|.. VariantsRepository
+    IExecutionsRepository <|.. ExecutionsRepository
     ISignalsRepository <|.. SignalsRepository
     IExecutionMutex <|.. ExecutionMutex
 
     ExperimentsRepository --> IDBHandler
-    ExperimentAssetsRepository --> IDBHandler
     VariantsRepository --> IDBHandler
+    ExecutionsRepository --> IDBHandler
     SignalsRepository --> IDBHandler
 
     %% ==========================================
     %% LAYER: DOMAIN MODELS
     %% ==========================================
+    class Asset {
+        +int ID
+        +string Symbol
+        +string Name
+        +string AssetType
+        +Nullable~string~ Exchange
+        +string Currency
+        +string Status
+        +time.Time CreatedAt
+        +time.Time UpdatedAt
+    }
+
     class Experiment {
         +int ID
-        +string Experiment
+        +string Name
         +Nullable~string~ Description
-        +JSONColumn Params
         +string Status
+        +string ExecutionMode
+        +Nullable~Time~ StartDate
+        +Nullable~Time~ EndDate
+        +string Frequency
+        +float64 MaxCapital
+        +string Currency
+        +JSONColumn Params
         +Nullable~string~ Notes
-        +ExperimentAsset[] Assets
         +Variant[] Variants
         +IsActive() bool
         +GetParam(key string) (any, bool)
-    }
-
-    class ExperimentAsset {
-        +int ID
-        +int ExperimentID
-        +int AssetID
-        +string Status
-        +time.Time CreatedAt
     }
 
     class Strategy {
         +int ID
         +string Name
         +string Class
-        +JSONColumn Params
+        +JSONColumn ParamDefinitions
         +string Status
     }
 
@@ -208,15 +239,45 @@ classDiagram
         +int ID
         +int ExperimentID
         +int StrategyID
-        +string Variant
+        +int AssetID
+        +string Asset
+        +string Name
+        +JSONColumn Params
+        +float64 CapitalAllocationPct
+        +string Status
         +Nullable~string~ Notes
         +string StrategyName
         +string Class
+        +JSONColumn ParamDefinitions
+    }
+
+    class Execution {
+        +int ID
+        +int ExperimentID
+        +string TriggerType
+        +string TriggeredBy
+        +time.Time AsOfTime
+        +string Status
+        +time.Time StartedAt
+        +Nullable~Time~ CompletedAt
+        +Nullable~string~ ErrorMessage
+        +ExecutionVariant[] Variants
+    }
+
+    class ExecutionVariant {
+        +int ID
+        +int ExecutionID
+        +int VariantID
         +JSONColumn Params
+        +string Status
+        +int DurationMs
+        +Nullable~string~ ErrorMessage
+        +Nullable~Time~ StartedAt
+        +Nullable~Time~ CompletedAt
     }
 
     class Signal {
-        +int AssetID
+        +string Asset
         +SignalType Type
         +float64 Price
         +time.Time Timestamp
@@ -227,10 +288,11 @@ classDiagram
 
     class SignalRecord {
         +int ID
+        +int ExecutionVariantID
+        +int ExecutionID
         +int VariantID
-        +int ExperimentID
-        +int StrategyID
-        +int AssetID
+        +string VariantName
+        +string Asset
         +SignalType Signal
         +float64 Price
         +float64 Confidence
@@ -240,10 +302,14 @@ classDiagram
     %% ==========================================
     %% DOMAIN MODEL RELATIONSHIPS
     %% ==========================================
-    Experiment "1" *-- "many" ExperimentAsset : Assets
     Experiment "1" *-- "many" Variant : Variants
-    Variant "1" --> "1" Strategy : references
+    Experiment "1" *-- "many" Execution : Executions
+    Variant "many" --> "1" Strategy : references
+    Variant "many" --> "1" Asset : references
+    Execution "1" *-- "many" ExecutionVariant : Variants
+    ExecutionVariant "many" --> "1" Variant : snapshots & evaluates
     
-    Variant ..> Signal : produces (BUY | HOLD | SELL)
+    ExecutionVariant ..> Signal : produces (BUY | HOLD | SELL)
     SignalDispatcher ..> Signal : dispatches
     SignalsRepository ..> SignalRecord : records
+

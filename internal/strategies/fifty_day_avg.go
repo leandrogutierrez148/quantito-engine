@@ -27,8 +27,8 @@ type QuantitoSignalResponse struct {
 }
 
 type QuantitoEvaluateResponse struct {
-	Strategy string                   `json:"strategy"`
-	Signals  []QuantitoSignalResponse `json:"signals"`
+	Strategy string                  `json:"strategy"`
+	Signal   *QuantitoSignalResponse `json:"signal,omitempty"`
 }
 
 type FiftyDayAvgStrategy struct {
@@ -123,11 +123,11 @@ func (s *FiftyDayAvgStrategy) GenerateSignal(asset string, params map[string]any
 		return nil, fmt.Errorf("quantito api error evaluating fifty_day_avg: %w", err)
 	}
 
-	if len(evalResp.Signals) == 0 {
+	if evalResp.Signal == nil {
 		return models.NewSignal(asset, models.SignalHold, currentPrice, "fifty_day_avg"), nil
 	}
 
-	first := evalResp.Signals[0]
+	first := evalResp.Signal
 	signalType := models.SignalType(first.SignalType)
 	price := first.Price
 	if price == 0 {

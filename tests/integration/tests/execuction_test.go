@@ -3,13 +3,13 @@ package tests
 import (
 	"net/http"
 	"net/http/httptest"
-	"sync"
 	"testing"
 	"time"
 
 	"quantito-engine/internal/controllers"
 	"quantito-engine/internal/infraestructures"
 	"quantito-engine/internal/interfaces"
+	"quantito-engine/internal/interfaces/mocks"
 	"quantito-engine/internal/models"
 	"quantito-engine/internal/repositories"
 	"quantito-engine/internal/services"
@@ -19,39 +19,11 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
 
-// Capturing Signal Sink for Integration Assertions
-type capturingSignalSink struct {
-	mu      sync.Mutex
-	signals []*models.Signal
-}
-
-func newCapturingSignalSink() *capturingSignalSink {
-	return &capturingSignalSink{}
-}
-
-func (s *capturingSignalSink) Name() string {
-	return "CapturingSignalSink"
-}
-
-func (s *capturingSignalSink) Send(signal *models.Signal) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.signals = append(s.signals, signal)
-	return nil
-}
-
-func (s *capturingSignalSink) GetSignals() []*models.Signal {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	copied := make([]*models.Signal, len(s.signals))
-	copy(copied, s.signals)
-	return copied
-}
-
-func setupIntegrationApp(t *testing.T) (*echo.Echo, interfaces.IExperimentsRepository, interfaces.IExecutionsRepository, interfaces.ISignalsRepository, *capturingSignalSink, interfaces.IDBHandler) {
+func setupIntegrationApp(t *testing.T) (*echo.Echo, interfaces.IExperimentsRepository, interfaces.IExecutionsRepository, interfaces.ISignalsRepository, *mocks.MockISignalSink, interfaces.IDBHandler) {
 	dbHandler := testdb.NewTestDBHandler(t)
 
 	experimentsRepo := repositories.NewExperimentsRepository(dbHandler)
@@ -59,9 +31,9 @@ func setupIntegrationApp(t *testing.T) (*echo.Echo, interfaces.IExperimentsRepos
 	signalsRepo := repositories.NewSignalsRepository(dbHandler)
 
 	strategyFactory := strategies.NewStrategyFactory()
-	capturingSink := newCapturingSignalSink()
+	mockSink := mocks.NewMockISignalSink(t)
 	consoleSink := sinks.NewConsoleSink()
-	signalDispatcher := sinks.NewSignalDispatcher(consoleSink, capturingSink)
+	signalDispatcher := sinks.NewSignalDispatcher(consoleSink, mockSink)
 	executionMutex := infraestructures.NewExecutionMutex()
 
 	executionService := services.NewExecutionService(
@@ -77,15 +49,27 @@ func setupIntegrationApp(t *testing.T) (*echo.Echo, interfaces.IExperimentsRepos
 	router := echo.New()
 	router.POST("/execute/:id", controller.Execute)
 
-	return router, experimentsRepo, executionsRepo, signalsRepo, capturingSink, dbHandler
+	return router, experimentsRepo, executionsRepo, signalsRepo, mockSink, dbHandler
 }
 
 func TestIntegration_ExecuteExperiment_Success(t *testing.T) {
-	router, _, _, signalsRepo, capturingSink, dbHandler := setupIntegrationApp(t)
+	router, _, executionsRepo, signalsRepo, mockSink, dbHandler := setupIntegrationApp(t)
 	testdb.CleanSignalsTable(t, dbHandler)
 
+	mockSink.EXPECT().
+		Send(mock.MatchedBy(func(signal *models.Signal) bool {
+			return signal != nil &&
+				(signal.Asset == "AAPL" || signal.Asset == "MSFT" || signal.Asset == "NVDA") &&
+				(signal.Type == models.SignalBuy || signal.Type == models.SignalHold || signal.Type == models.SignalSell) &&
+				signal.Price > 0.0 &&
+				signal.StrategyName != "" &&
+				!signal.Timestamp.IsZero()
+		})).
+		Return(nil).
+		Times(6)
+
 	// 1. Perform HTTP request to execute Experiment #1
-	// Experiment 1 has 3 Assets ("AAPL", "MSFT", "NVDA") and 2 Variants (50-day SMA, Price Momentum) in MySQL
+	// Experiment 1 has 6 Variants (AAPL, MSFT, NVDA across 50-day SMA and Price Momentum) in MySQL
 	req := httptest.NewRequest(http.MethodPost, "/execute/1", nil)
 	rec := httptest.NewRecorder()
 
@@ -94,42 +78,37 @@ func TestIntegration_ExecuteExperiment_Success(t *testing.T) {
 	// 2. Assert HTTP Status is 200 OK
 	require.Equal(t, http.StatusOK, rec.Code)
 
-	// 3. Verify that 6 evaluations occurred (3 assets * 2 strategies in contraposition)
-	signals := capturingSink.GetSignals()
-	require.Len(t, signals, 6, "Expected 6 signals generated (3 assets x 2 strategies)")
+	// 3. Verify execution and execution_variants persistence in MySQL
+	executions, err := executionsRepo.FindByExperiment(1, 10)
+	require.NoError(t, err)
+	require.Len(t, executions, 1, "Expected 1 execution record for Experiment 1")
+	assert.Equal(t, string(models.ExecutionCompleted), executions[0].Status)
 
-	// Group signals by Asset
-	signalsByAsset := make(map[string][]*models.Signal)
-	for _, s := range signals {
-		signalsByAsset[s.Asset] = append(signalsByAsset[s.Asset], s)
-		assert.Contains(t, []models.SignalType{models.SignalBuy, models.SignalHold, models.SignalSell}, s.Type)
-		assert.Greater(t, s.Price, 0.0)
-		assert.NotEmpty(t, s.StrategyName)
-		assert.False(t, s.Timestamp.IsZero())
+	execDetail, err := executionsRepo.FindByID(executions[0].ID)
+	require.NoError(t, err)
+	require.Len(t, execDetail.Variants, 6, "Expected 6 execution_variants records (1 per variant)")
+	for _, ev := range execDetail.Variants {
+		assert.Equal(t, string(models.ExecutionVariantCompleted), ev.Status)
+		assert.NotNil(t, ev.Params.Get(), "Expected snapshot params persisted in execution_variants")
 	}
-
-	// Verify all 3 assets ("AAPL", "MSFT", "NVDA") were evaluated with 2 signals each
-	assert.Len(t, signalsByAsset["AAPL"], 2, "AAPL should have 2 signals (one per strategy)")
-	assert.Len(t, signalsByAsset["MSFT"], 2, "MSFT should have 2 signals (one per strategy)")
-	assert.Len(t, signalsByAsset["NVDA"], 2, "NVDA should have 2 signals (one per strategy)")
 
 	// 4. Verify historical persistence in real MySQL database via signalsRepo
 	noDate := models.Nullable[time.Time]{}
 	persistedSignalsAAPL, err := signalsRepo.FindByAsset("AAPL", noDate, noDate)
 	require.NoError(t, err)
-	assert.Len(t, persistedSignalsAAPL, 2, "Expected 2 records persisted in signals table for AAPL")
+	assert.Len(t, persistedSignalsAAPL, 2, "Expected 2 records persisted in signals table for AAPL (SMA 50 + Price Momentum)")
 
 	persistedSignalsMSFT, err := signalsRepo.FindByAsset("MSFT", noDate, noDate)
 	require.NoError(t, err)
-	assert.Len(t, persistedSignalsMSFT, 2, "Expected 2 records persisted in signals table for MSFT")
+	assert.Len(t, persistedSignalsMSFT, 2, "Expected 2 records persisted in signals table for MSFT (SMA 50 + Price Momentum)")
 
 	persistedSignalsNVDA, err := signalsRepo.FindByAsset("NVDA", noDate, noDate)
 	require.NoError(t, err)
-	assert.Len(t, persistedSignalsNVDA, 2, "Expected 2 records persisted in signals table for NVDA")
+	assert.Len(t, persistedSignalsNVDA, 2, "Expected 2 records persisted in signals table for NVDA (SMA 50 + Price Momentum)")
 }
 
 func TestIntegration_ExecuteExperiment_Inactive(t *testing.T) {
-	router, _, _, signalsRepo, capturingSink, _ := setupIntegrationApp(t)
+	router, _, _, signalsRepo, mockSink, _ := setupIntegrationApp(t)
 
 	// Execute Experiment #2 which is PAUSED in MySQL seed data
 	req := httptest.NewRequest(http.MethodPost, "/execute/2", nil)
@@ -139,7 +118,7 @@ func TestIntegration_ExecuteExperiment_Inactive(t *testing.T) {
 
 	// Should respond 200 OK and gracefully skip execution
 	assert.Equal(t, http.StatusOK, rec.Code)
-	assert.Empty(t, capturingSink.GetSignals(), "No signals should be emitted for inactive experiment")
+	mockSink.AssertNotCalled(t, "Send", mock.Anything)
 
 	noDate := models.Nullable[time.Time]{}
 	persistedSignals, err := signalsRepo.FindByAsset("BTC-USD", noDate, noDate)

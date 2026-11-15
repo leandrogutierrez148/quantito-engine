@@ -50,9 +50,10 @@ quantito-engine/
 
 ## 2. Go Standards & Architectural Guidelines
 
-### 2.1. Clean Architecture & Interfaces
+### 2.1. Clean Architecture, Interfaces & Mocking (Mockery Only)
 - Keep logic decoupled by relying on interfaces defined in `internal/interfaces/`.
-- Every external dependency (DB, HTTP client, Clock, Mutex) must be injected via its interface.
+- Every external dependency (DB, HTTP client, Clock, Mutex, Sinks, Strategies) must be injected via its interface.
+- **Strict Mockery Rule**: **All mocks must be generated exclusively using `mockery`** (`internal/interfaces/mocks/`). **Never write manual/hand-crafted mock structs** in test files (neither unit nor integration tests) that duplicate or collide with domain interfaces.
 - Run `mockery` whenever an interface is added or updated in `internal/interfaces/`.
 
 ### 2.2. Error Handling & Logging

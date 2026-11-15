@@ -13,7 +13,21 @@ TRUNCATE TABLE `executions`;
 TRUNCATE TABLE `variants`;
 TRUNCATE TABLE `strategies`;
 TRUNCATE TABLE `experiments`;
+TRUNCATE TABLE `assets`;
 SET FOREIGN_KEY_CHECKS = 1;
+
+-- ============================================================================
+-- 0. ASSETS (Tradable Financial Instruments Catalog)
+-- ============================================================================
+INSERT INTO `assets` (`id`, `symbol`, `name`, `asset_type`, `exchange`, `currency`, `status`, `created_at`, `updated_at`) VALUES
+(1, 'AAPL', 'Apple Inc.', 'EQUITY', 'NASDAQ', 'USD', 'ACTIVE', NOW(), NOW()),
+(2, 'MSFT', 'Microsoft Corporation', 'EQUITY', 'NASDAQ', 'USD', 'ACTIVE', NOW(), NOW()),
+(3, 'NVDA', 'NVIDIA Corporation', 'EQUITY', 'NASDAQ', 'USD', 'ACTIVE', NOW(), NOW()),
+(4, 'SPY', 'SPDR S&P 500 ETF Trust', 'ETF', 'NYSE_ARCA', 'USD', 'ACTIVE', NOW(), NOW()),
+(5, 'QQQ', 'Invesco QQQ Trust', 'ETF', 'NASDAQ', 'USD', 'ACTIVE', NOW(), NOW()),
+(6, 'BTC-USD', 'Bitcoin USD', 'CRYPTO', 'CRYPTO', 'USD', 'ACTIVE', NOW(), NOW()),
+(7, 'ETH-USD', 'Ethereum USD', 'CRYPTO', 'CRYPTO', 'USD', 'ACTIVE', NOW(), NOW()),
+(8, 'BTCUSDT', 'Bitcoin Tether Spot', 'CRYPTO', 'BINANCE', 'USDT', 'ACTIVE', NOW(), NOW());
 
 -- ============================================================================
 -- 1. STRATEGIES (Quantitative Strategies Catalog & Parameter Specs)
@@ -67,7 +81,7 @@ INSERT INTO `strategies` (`id`, `name`, `class`, `param_definitions`, `status`, 
 INSERT INTO `experiments` (
   `id`, `name`, `description`, `status`, `execution_mode`,
   `start_date`, `end_date`, `frequency`, `max_capital`, `currency`,
-  `assets`, `params`, `notes`, `created_at`, `updated_at`
+  `params`, `notes`, `created_at`, `updated_at`
 ) VALUES
 (
   1,
@@ -80,7 +94,6 @@ INSERT INTO `experiments` (
   '1d',
   25000.0000,
   'USD',
-  JSON_ARRAY('AAPL', 'MSFT', 'NVDA'),
   JSON_OBJECT(
     'api_url', 'http://localhost:8081',
     'benchmark', 'SPY',
@@ -102,7 +115,6 @@ INSERT INTO `experiments` (
   '1h',
   10000.0000,
   'USD',
-  JSON_ARRAY('BTC-USD', 'ETH-USD'),
   JSON_OBJECT(
     'benchmark', 'BTC-USD',
     'slippage_bps', 10
@@ -122,7 +134,6 @@ INSERT INTO `experiments` (
   '2h',
   50000.0000,
   'USDT',
-  JSON_ARRAY('BTCUSDT'),
   JSON_OBJECT(
     'api_url', 'http://localhost:8081',
     'benchmark', 'BTCUSDT',
@@ -149,7 +160,6 @@ INSERT INTO `experiments` (
   '1d',
   100000.0000,
   'USD',
-  JSON_ARRAY('AAPL', 'MSFT', 'NVDA', 'SPY', 'QQQ'),
   JSON_OBJECT(
     'api_url', 'http://localhost:8081',
     'benchmark', 'SPY',
@@ -168,25 +178,27 @@ INSERT INTO `experiments` (
 );
 
 -- ============================================================================
--- 3. VARIANTS (Experiment Variants / Parametrized Strategy Setups)
+-- 3. VARIANTS (Experiment Variants / Parametrized Strategy & Asset Setups)
 -- ============================================================================
 INSERT INTO `variants` (
-  `id`, `experiment_id`, `strategy_id`, `name`, `params`,
+  `id`, `experiment_id`, `strategy_id`, `asset_id`, `name`, `params`,
   `capital_allocation_pct`, `status`, `notes`, `created_at`, `updated_at`
 ) VALUES
+-- Experiment 1: AAPL, MSFT, NVDA across SMA 50 (Strategy 1) and Price Momentum (Strategy 2)
 (
   1,
   1,
   1,
-  'Variant A (50-Day SMA)',
+  1,
+  'AAPL - 50-Day SMA',
   JSON_OBJECT(
     'fifty_day_avg', 100.0,
     'current_price', 105.5,
     'threshold', 0.02
   ),
-  0.5000,
+  0.1667,
   'ACTIVE',
-  'Estrategia tendencial basada en media movil de 50 dias',
+  'Estrategia tendencial basada en media movil de 50 dias para AAPL',
   NOW(),
   NOW()
 ),
@@ -194,41 +206,116 @@ INSERT INTO `variants` (
   2,
   1,
   2,
-  'Variant B (Price Momentum)',
+  1,
+  'AAPL - Price Momentum',
   JSON_OBJECT(
-    'current_price', 150.0,
+    'current_price', 105.5,
     'pct_change', 0.065,
     'buy_threshold', 0.05,
     'sell_threshold', -0.05
   ),
-  0.5000,
+  0.1667,
   'ACTIVE',
-  'Estrategia de momentum basada en variacion porcentual reciente',
+  'Estrategia de momentum basada en variacion porcentual reciente para AAPL',
   NOW(),
   NOW()
 ),
 (
   3,
+  1,
+  1,
   2,
-  2,
-  'Variant Crypto Conservative',
+  'MSFT - 50-Day SMA',
   JSON_OBJECT(
-    'current_price', 150.0,
+    'fifty_day_avg', 410.0,
+    'current_price', 425.0,
+    'threshold', 0.02
+  ),
+  0.1667,
+  'ACTIVE',
+  'Estrategia tendencial basada en media movil de 50 dias para MSFT',
+  NOW(),
+  NOW()
+),
+(
+  4,
+  1,
+  2,
+  2,
+  'MSFT - Price Momentum',
+  JSON_OBJECT(
+    'current_price', 425.0,
+    'pct_change', 0.055,
+    'buy_threshold', 0.05,
+    'sell_threshold', -0.05
+  ),
+  0.1667,
+  'ACTIVE',
+  'Estrategia de momentum basada en variacion porcentual reciente para MSFT',
+  NOW(),
+  NOW()
+),
+(
+  5,
+  1,
+  1,
+  3,
+  'NVDA - 50-Day SMA',
+  JSON_OBJECT(
+    'fifty_day_avg', 120.0,
+    'current_price', 132.0,
+    'threshold', 0.02
+  ),
+  0.1666,
+  'ACTIVE',
+  'Estrategia tendencial basada en media movil de 50 dias para NVDA',
+  NOW(),
+  NOW()
+),
+(
+  6,
+  1,
+  2,
+  3,
+  'NVDA - Price Momentum',
+  JSON_OBJECT(
+    'current_price', 132.0,
+    'pct_change', 0.082,
+    'buy_threshold', 0.05,
+    'sell_threshold', -0.05
+  ),
+  0.1666,
+  'ACTIVE',
+  'Estrategia de momentum basada en variacion porcentual reciente para NVDA',
+  NOW(),
+  NOW()
+),
+-- Experiment 2: Crypto Momentum Baseline (Paused)
+(
+  7,
+  2,
+  2,
+  6,
+  'BTC-USD - Crypto Conservative',
+  JSON_OBJECT(
+    'current_price', 62000.0,
     'pct_change', 0.02,
     'buy_threshold', 0.08,
     'sell_threshold', -0.08
   ),
   1.0000,
   'ACTIVE',
-  'Estrategia de momentum conservadora en cripto',
+  'Estrategia de momentum conservadora en cripto para BTC-USD',
   NOW(),
   NOW()
 ),
+-- Experiment 3: Clockwork BTC 2H WalkForward (BTCUSDT - Asset 8)
 (
-  4,
+  8,
   3,
   3,
-  'Variant Aug Fixed Postfit (aug_fixed_postfit)',
+  8,
+  'BTCUSDT - Aug Fixed Postfit (aug_fixed_postfit)',
   JSON_OBJECT(
     'current_price', 63500.0,
     'prediction_bps', 26.5,
@@ -242,10 +329,11 @@ INSERT INTO `variants` (
   NOW()
 ),
 (
-  5,
+  9,
   3,
   3,
-  'Variant Oct Refit Postfit (oct_refit_postfit)',
+  8,
+  'BTCUSDT - Oct Refit Postfit (oct_refit_postfit)',
   JSON_OBJECT(
     'current_price', 63500.0,
     'prediction_bps', -24.0,
@@ -259,10 +347,11 @@ INSERT INTO `variants` (
   NOW()
 ),
 (
-  6,
+  10,
   3,
   3,
-  'Variant Jan Refit Train90 (jan_refit_train90)',
+  8,
+  'BTCUSDT - Jan Refit Train90 (jan_refit_train90)',
   JSON_OBJECT(
     'current_price', 63500.0,
     'prediction_bps', 14.2,
@@ -275,11 +364,13 @@ INSERT INTO `variants` (
   NOW(),
   NOW()
 ),
+-- Experiment 4: Clockwork Daily CrossAsset Adaptation
 (
-  7,
+  11,
   4,
   3,
-  'Variant Execution Aligned (execution_aligned)',
+  1,
+  'AAPL - Execution Aligned (execution_aligned)',
   JSON_OBJECT(
     'current_price', 175.0,
     'prediction_bps', 25.4,
@@ -293,10 +384,11 @@ INSERT INTO `variants` (
   NOW()
 ),
 (
-  8,
+  12,
   4,
   3,
-  'Variant Source Label Emulation (source_label_emulation)',
+  1,
+  'AAPL - Source Label Emulation (source_label_emulation)',
   JSON_OBJECT(
     'current_price', 175.0,
     'prediction_bps', 15.0,

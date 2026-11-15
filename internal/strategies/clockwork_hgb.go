@@ -74,11 +74,11 @@ func (s *ClockworkHGBStrategy) GenerateSignal(asset string, params map[string]an
 		return nil, fmt.Errorf("quantito api error evaluating clockwork_hgb: %w", err)
 	}
 
-	if len(evalResp.Signals) == 0 {
+	if evalResp.Signal == nil {
 		return models.NewSignal(asset, models.SignalHold, mapped.CurrentPrice, "clockwork_hgb"), nil
 	}
 
-	first := evalResp.Signals[0]
+	first := evalResp.Signal
 	signalType := models.SignalType(first.SignalType)
 	price := first.Price
 	if price == 0 {

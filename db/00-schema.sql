@@ -17,10 +17,29 @@ DROP TABLE IF EXISTS `variants`;
 DROP TABLE IF EXISTS `strategies`;
 DROP TABLE IF EXISTS `experiment_assets`;
 DROP TABLE IF EXISTS `experiments`;
+DROP TABLE IF EXISTS `assets`;
 SET FOREIGN_KEY_CHECKS = 1;
 
 -- ============================================================================
--- 1. TABLE: EXPERIMENTS (Quantitative Experiments Specification)
+-- 1. TABLE: ASSETS (Tradable Financial Instruments Catalog)
+-- ============================================================================
+CREATE TABLE `assets` (
+  `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `symbol` VARCHAR(20) NOT NULL, -- e.g. 'AAPL', 'MSFT', 'NVDA', 'BTCUSDT'
+  `name` VARCHAR(100) NOT NULL,
+  `asset_type` VARCHAR(20) NOT NULL DEFAULT 'EQUITY', -- 'EQUITY', 'ETF', 'CRYPTO', 'FOREX'
+  `exchange` VARCHAR(50) NULL, -- e.g. 'US', 'NASDAQ', 'BINANCE'
+  `currency` VARCHAR(10) NOT NULL DEFAULT 'USD',
+  `status` VARCHAR(20) NOT NULL DEFAULT 'ACTIVE', -- 'ACTIVE', 'INACTIVE'
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_assets_symbol` (`symbol`),
+  INDEX `idx_assets_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================================================
+-- 2. TABLE: EXPERIMENTS (Quantitative Experiments Specification)
 -- ============================================================================
 CREATE TABLE `experiments` (
   `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -33,7 +52,6 @@ CREATE TABLE `experiments` (
   `frequency` VARCHAR(50) NOT NULL DEFAULT '1d', -- e.g. '15m', '1h', '1d'
   `max_capital` DECIMAL(18, 4) NOT NULL DEFAULT 10000.0000,
   `currency` VARCHAR(10) NOT NULL DEFAULT 'USD',
-  `assets` JSON NOT NULL, -- JSON Array of assets, e.g. ["AAPL", "MSFT", "NVDA"]
   `params` JSON NULL, -- Optional execution settings (e.g. benchmark, slippage, commission)
   `notes` TEXT NULL,
   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -44,12 +62,12 @@ CREATE TABLE `experiments` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================================================
--- 2. TABLE: STRATEGIES (Quantitative Strategies Catalog & Param Specs)
+-- 3. TABLE: STRATEGIES (Quantitative Strategies Catalog & Param Specs)
 -- ============================================================================
 CREATE TABLE `strategies` (
   `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
   `name` VARCHAR(100) NOT NULL,
-  `class` VARCHAR(100) NOT NULL, -- e.g.: 'fifty_day_avg', 'price_momentum'
+  `class` VARCHAR(100) NOT NULL, -- e.g.: 'fifty_day_avg', 'price_momentum', 'clockwork_hgb'
   `param_definitions` JSON NOT NULL, -- Parameter specifications (types, defaults, required)
   `status` VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -60,14 +78,15 @@ CREATE TABLE `strategies` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================================================
--- 3. TABLE: VARIANTS (Experiment Variants / Parametrized Strategy Setups)
+-- 4. TABLE: VARIANTS (Experiment Variants / Parametrized Strategy & Asset Setups)
 -- ============================================================================
 CREATE TABLE `variants` (
   `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
   `experiment_id` INT UNSIGNED NOT NULL,
   `strategy_id` INT UNSIGNED NOT NULL,
-  `name` VARCHAR(100) NOT NULL, -- e.g.: 'Variant A (SMA 50)', 'Variant B (Price Momentum)'
-  `params` JSON NOT NULL, -- Concrete runtime parameters provided to the strategy
+  `asset_id` INT UNSIGNED NOT NULL,
+  `name` VARCHAR(100) NOT NULL, -- e.g.: 'AAPL - 50-Day SMA', 'AAPL - Price Momentum'
+  `params` JSON NOT NULL, -- Concrete runtime parameters provided to the strategy (mutable over time)
   `capital_allocation_pct` DECIMAL(5, 4) NOT NULL DEFAULT 1.0000,
   `status` VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
   `notes` TEXT NULL,
@@ -76,16 +95,20 @@ CREATE TABLE `variants` (
   PRIMARY KEY (`id`),
   INDEX `idx_variants_experiment` (`experiment_id`),
   INDEX `idx_variants_strategy` (`strategy_id`),
+  INDEX `idx_variants_asset` (`asset_id`),
   CONSTRAINT `fk_variants_experiment`
     FOREIGN KEY (`experiment_id`) REFERENCES `experiments` (`id`)
     ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `fk_variants_strategy`
     FOREIGN KEY (`strategy_id`) REFERENCES `strategies` (`id`)
+    ON DELETE RESTRICT ON UPDATE CASCADE,
+  CONSTRAINT `fk_variants_asset`
+    FOREIGN KEY (`asset_id`) REFERENCES `assets` (`id`)
     ON DELETE RESTRICT ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================================================
--- 4. TABLE: EXECUTIONS (Discrete Experiment Run Lifecycle)
+-- 5. TABLE: EXECUTIONS (Discrete Experiment Run Lifecycle)
 -- ============================================================================
 CREATE TABLE `executions` (
   `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -108,14 +131,14 @@ CREATE TABLE `executions` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================================================
--- 5. TABLE: EXECUTION_VARIANTS (Variant Execution Outcome per Run)
+-- 6. TABLE: EXECUTION_VARIANTS (Variant Execution Outcome & Snapshot per Run)
 -- ============================================================================
 CREATE TABLE `execution_variants` (
   `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
   `execution_id` INT UNSIGNED NOT NULL,
   `variant_id` INT UNSIGNED NOT NULL,
+  `params` JSON NOT NULL, -- Immutable snapshot of variant parameters at execution time
   `status` VARCHAR(20) NOT NULL DEFAULT 'PENDING', -- 'PENDING', 'RUNNING', 'COMPLETED', 'FAILED'
-  `signals_count` INT UNSIGNED NOT NULL DEFAULT 0,
   `duration_ms` INT UNSIGNED NOT NULL DEFAULT 0,
   `error_message` TEXT NULL,
   `started_at` DATETIME NULL,
@@ -135,7 +158,7 @@ CREATE TABLE `execution_variants` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================================================
--- 6. TABLE: SIGNALS (Signal Traceability Log linked to Execution Variant)
+-- 7. TABLE: SIGNALS (Signal Traceability Log linked to Execution Variant)
 -- ============================================================================
 CREATE TABLE `signals` (
   `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -179,7 +202,6 @@ BEGIN
     `frequency`,
     `max_capital`,
     `currency`,
-    `assets`,
     `params`,
     `notes`,
     `created_at`,
@@ -208,7 +230,6 @@ BEGIN
     `frequency`,
     `max_capital`,
     `currency`,
-    `assets`,
     `params`,
     `notes`,
     `created_at`,
@@ -236,7 +257,6 @@ BEGIN
     `frequency`,
     `max_capital`,
     `currency`,
-    `assets`,
     `params`,
     `notes`,
     `created_at`,
@@ -257,6 +277,8 @@ BEGIN
     v.`id`,
     v.`experiment_id`,
     v.`strategy_id`,
+    v.`asset_id`,
+    a.`symbol` AS `asset`,
     v.`name`,
     v.`params`,
     v.`capital_allocation_pct`,
@@ -268,8 +290,10 @@ BEGIN
     st.`status` AS `strategy_status`
   FROM `variants` v
   INNER JOIN `strategies` st ON st.`id` = v.`strategy_id`
+  INNER JOIN `assets` a ON a.`id` = v.`asset_id`
   WHERE (p_experiment_id = 0 OR v.`experiment_id` = p_experiment_id)
     AND st.`status` = 'ACTIVE'
+    AND a.`status` = 'ACTIVE'
     AND v.`status` = 'ACTIVE'
   ORDER BY v.`id` ASC;
 END$$
@@ -360,19 +384,29 @@ END$$
 DROP PROCEDURE IF EXISTS `sp_create_execution_variant`$$
 CREATE PROCEDURE `sp_create_execution_variant`(
   IN p_execution_id INT UNSIGNED,
-  IN p_variant_id INT UNSIGNED
+  IN p_variant_id INT UNSIGNED,
+  IN p_params JSON
 )
 BEGIN
   DECLARE v_id INT UNSIGNED;
+  DECLARE v_snapshot_params JSON;
+
+  IF p_params IS NOT NULL THEN
+    SET v_snapshot_params = p_params;
+  ELSE
+    SELECT `params` INTO v_snapshot_params FROM `variants` WHERE `id` = p_variant_id;
+  END IF;
 
   INSERT INTO `execution_variants` (
     `execution_id`,
     `variant_id`,
+    `params`,
     `status`,
     `started_at`
   ) VALUES (
     p_execution_id,
     p_variant_id,
+    v_snapshot_params,
     'RUNNING',
     NOW()
   );
@@ -383,8 +417,8 @@ BEGIN
     `id`,
     `execution_id`,
     `variant_id`,
+    `params`,
     `status`,
-    `signals_count`,
     `duration_ms`,
     `error_message`,
     `started_at`,
@@ -402,7 +436,6 @@ DROP PROCEDURE IF EXISTS `sp_update_execution_variant`$$
 CREATE PROCEDURE `sp_update_execution_variant`(
   IN p_id INT UNSIGNED,
   IN p_status VARCHAR(20),
-  IN p_signals_count INT UNSIGNED,
   IN p_duration_ms INT UNSIGNED,
   IN p_error_message TEXT
 )
@@ -410,7 +443,6 @@ BEGIN
   UPDATE `execution_variants`
   SET 
     `status` = p_status,
-    `signals_count` = p_signals_count,
     `duration_ms` = p_duration_ms,
     `error_message` = p_error_message,
     `completed_at` = NOW()
@@ -420,8 +452,8 @@ BEGIN
     `id`,
     `execution_id`,
     `variant_id`,
+    `params`,
     `status`,
-    `signals_count`,
     `duration_ms`,
     `error_message`,
     `started_at`,

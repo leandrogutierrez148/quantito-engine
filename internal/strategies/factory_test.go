@@ -58,29 +58,25 @@ func TestClockworkHGBStrategy(t *testing.T) {
 			Strategy: "clockwork_hgb",
 		}
 		if predBps >= gateBps {
-			resp.Signals = []strategies.QuantitoSignalResponse{
-				{
-					Symbol:       req.Symbol,
-					SignalType:   "BUY",
-					Price:        price,
-					StrategyName: "clockwork_hgb",
-					Confidence:   0.85,
-					Metadata: map[string]any{
-						"model_variant": modelVariant,
-					},
+			resp.Signal = &strategies.QuantitoSignalResponse{
+				Symbol:       req.Symbol,
+				SignalType:   "BUY",
+				Price:        price,
+				StrategyName: "clockwork_hgb",
+				Confidence:   0.85,
+				Metadata: map[string]any{
+					"model_variant": modelVariant,
 				},
 			}
 		} else if predBps <= -gateBps {
-			resp.Signals = []strategies.QuantitoSignalResponse{
-				{
-					Symbol:       req.Symbol,
-					SignalType:   "SELL",
-					Price:        price,
-					StrategyName: "clockwork_hgb",
-					Confidence:   0.85,
-					Metadata: map[string]any{
-						"model_variant": modelVariant,
-					},
+			resp.Signal = &strategies.QuantitoSignalResponse{
+				Symbol:       req.Symbol,
+				SignalType:   "SELL",
+				Price:        price,
+				StrategyName: "clockwork_hgb",
+				Confidence:   0.85,
+				Metadata: map[string]any{
+					"model_variant": modelVariant,
 				},
 			}
 		}
@@ -161,24 +157,20 @@ func TestFiftyDayAvgStrategy(t *testing.T) {
 			Strategy: "fifty_day_avg",
 		}
 		if diffPct > threshPct {
-			resp.Signals = []strategies.QuantitoSignalResponse{
-				{
-					Symbol:       req.Symbol,
-					SignalType:   "BUY",
-					Price:        req.MarketData[0]["close"].(float64),
-					StrategyName: "fifty_day_avg",
-					Confidence:   0.8,
-				},
+			resp.Signal = &strategies.QuantitoSignalResponse{
+				Symbol:       req.Symbol,
+				SignalType:   "BUY",
+				Price:        req.MarketData[0]["close"].(float64),
+				StrategyName: "fifty_day_avg",
+				Confidence:   0.8,
 			}
 		} else if diffPct < -threshPct {
-			resp.Signals = []strategies.QuantitoSignalResponse{
-				{
-					Symbol:       req.Symbol,
-					SignalType:   "SELL",
-					Price:        req.MarketData[0]["close"].(float64),
-					StrategyName: "fifty_day_avg",
-					Confidence:   0.8,
-				},
+			resp.Signal = &strategies.QuantitoSignalResponse{
+				Symbol:       req.Symbol,
+				SignalType:   "SELL",
+				Price:        req.MarketData[0]["close"].(float64),
+				StrategyName: "fifty_day_avg",
+				Confidence:   0.8,
 			}
 		}
 

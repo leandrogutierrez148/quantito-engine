@@ -1,4 +1,4 @@
-.PHONY: help up up-local down prepare-integration-tests down-integration-tests integration-tests unit-tests test
+.PHONY: help up up-local down prepare-tests-integration down-tests-integration tests-integration tests-unit test
 
 DOCKER_COMPOSE = docker compose -f .dev/docker-compose.yml
 TEST_DOCKER_COMPOSE = docker compose -f tests/integration/docker-compose.yml
@@ -20,17 +20,17 @@ up-local: ## Run the service locally in console
 down: ## Stop and remove Docker Compose containers
 	$(DOCKER_COMPOSE) down -v --remove-orphans
 
-prepare-integration-tests: ## Spin up and force recreate environment for integration tests
+prepare-tests-integration: ## Spin up and force recreate environment for integration tests
 	@test -f $(TEST_CONFIG_FILE) || cp tests/integration/configs/config.example.toml $(TEST_CONFIG_FILE)
 	$(TEST_DOCKER_COMPOSE) up -d --force-recreate --build
 
-down-integration-tests: ## Stop and remove integration test containers
+down-tests-integration: ## Stop and remove integration test containers
 	$(TEST_DOCKER_COMPOSE) down -v --remove-orphans
 
-integration-tests: ## Run integration tests
+test-integration: ## Run integration tests
 	CONFIG_FILE=$(TEST_CONFIG_FILE) go test -count=1 -v ./tests/...
 
-unit-tests: ## Run unit tests
+test-unit: ## Run unit tests
 	go test -count=1 -v ./internal/... ./cmd/...
 
-test: unit-tests integration-tests ## Run all tests (unit and integration)
+test: test-unit test-integration ## Run all tests (unit and integration)

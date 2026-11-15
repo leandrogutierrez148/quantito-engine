@@ -13,7 +13,6 @@ type Experiment struct {
 	Frequency     string                     `db:"frequency" json:"frequency"`
 	MaxCapital    float64                    `db:"max_capital" json:"maxCapital"`
 	Currency      string                     `db:"currency" json:"currency"`
-	Assets        JSONColumn[[]string]       `db:"assets" json:"assets"`
 	Params        JSONColumn[map[string]any] `db:"params" json:"params,omitempty"`
 	Notes         Nullable[string]           `db:"notes" json:"notes"`
 	Variants      []*Variant                 `db:"-" json:"variants,omitempty"`
@@ -29,11 +28,4 @@ func (e *Experiment) GetParam(key string) (any, bool) {
 	}
 	val, ok := (*e.Params.Get())[key]
 	return val, ok
-}
-
-func (e *Experiment) GetAssets() []string {
-	if e == nil || e.Assets.Get() == nil {
-		return nil
-	}
-	return *e.Assets.Get()
 }
