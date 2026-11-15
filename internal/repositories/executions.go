@@ -75,7 +75,7 @@ func (r *executionsRepository) CreateExecutionVariant(executionID, variantID int
 	return &ev, nil
 }
 
-func (r *executionsRepository) UpdateExecutionVariant(id int, status string, durationMs int, errorMessage models.Nullable[string]) (*models.ExecutionVariant, error) {
+func (r *executionsRepository) UpdateExecutionVariant(id int, status string, attempts int, durationMs int, errorMessage models.Nullable[string]) (*models.ExecutionVariant, error) {
 	var ev models.ExecutionVariant
 	var errVal any
 	if errorMessage.Valid {
@@ -83,10 +83,11 @@ func (r *executionsRepository) UpdateExecutionVariant(id int, status string, dur
 	}
 
 	err := r.db.QueryOne(
-		"CALL sp_update_execution_variant (?, ?, ?, ?)",
+		"CALL sp_update_execution_variant (?, ?, ?, ?, ?)",
 		&ev,
 		id,
 		status,
+		attempts,
 		durationMs,
 		errVal,
 	)
@@ -108,7 +109,7 @@ func (r *executionsRepository) FindByID(executionID int) (*models.Execution, err
 	}
 
 	err = r.db.QueryAll(
-		"SELECT id, execution_id, variant_id, params, status, duration_ms, error_message, started_at, completed_at, created_at, updated_at FROM execution_variants WHERE execution_id = ?",
+		"SELECT id, execution_id, variant_id, params, status, attempts, duration_ms, error_message, started_at, completed_at, created_at, updated_at FROM execution_variants WHERE execution_id = ?",
 		&exec.Variants,
 		executionID,
 	)

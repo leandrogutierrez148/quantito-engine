@@ -17,6 +17,7 @@ type ExecutionVariant struct {
 	VariantID    int                        `db:"variant_id" json:"variantId"`
 	Params       JSONColumn[map[string]any] `db:"params" json:"params"`
 	Status       string                     `db:"status" json:"status"`
+	Attempts     int                        `db:"attempts" json:"attempts"`
 	DurationMs   int                        `db:"duration_ms" json:"durationMs"`
 	ErrorMessage Nullable[string]           `db:"error_message" json:"errorMessage,omitempty"`
 	StartedAt    Nullable[time.Time]        `db:"started_at" json:"startedAt,omitempty"`

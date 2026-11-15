@@ -89,6 +89,7 @@ func TestIntegration_ExecuteExperiment_Success(t *testing.T) {
 	require.Len(t, execDetail.Variants, 6, "Expected 6 execution_variants records (1 per variant)")
 	for _, ev := range execDetail.Variants {
 		assert.Equal(t, string(models.ExecutionVariantCompleted), ev.Status)
+		assert.Equal(t, 1, ev.Attempts, "Expected 1 attempt for successful execution variant")
 		assert.NotNil(t, ev.Params.Get(), "Expected snapshot params persisted in execution_variants")
 	}
 
@@ -107,8 +108,56 @@ func TestIntegration_ExecuteExperiment_Success(t *testing.T) {
 	assert.Len(t, persistedSignalsNVDA, 2, "Expected 2 records persisted in signals table for NVDA (SMA 50 + Price Momentum)")
 }
 
+func TestIntegration_ExecuteExperiment_QuantitoRouteNotFound_FailedVariantsAndAttempts(t *testing.T) {
+	router, _, executionsRepo, signalsRepo, mockSink, dbHandler := setupIntegrationApp(t)
+	testdb.CleanSignalsTable(t, dbHandler)
+
+	// 1. Perform HTTP request to execute Experiment #3 (Clockwork_BTC_2H_WalkForward)
+	// Experiment 3 has 3 ACTIVE variants using strategy 'clockwork_hgb', which is not registered in quantito (returns 404)
+	req := httptest.NewRequest(http.MethodPost, "/execute/3", nil)
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	// 2. Assert HTTP Status is 200 OK and no signals were dispatched to sinks
+	require.Equal(t, http.StatusOK, rec.Code)
+	mockSink.AssertNotCalled(t, "Send", mock.Anything)
+
+	// 3. Verify execution record was created and marked as FAILED
+	executions, err := executionsRepo.FindByExperiment(3, 10)
+	require.NoError(t, err)
+	require.Len(t, executions, 1, "Expected 1 execution record created for Experiment 3")
+	assert.Equal(t, string(models.ExecutionFailed), executions[0].Status)
+	assert.True(t, executions[0].ErrorMessage.Valid, "Expected error message on failed execution")
+	assert.Equal(t, "All variants failed during execution", executions[0].ErrorMessage.Val)
+
+	// 4. Verify all 3 execution_variants were created, marked as FAILED, and recorded all attempts performed
+	execDetail, err := executionsRepo.FindByID(executions[0].ID)
+	require.NoError(t, err)
+	require.Len(t, execDetail.Variants, 3, "Expected 3 execution_variants records for Experiment 3")
+	for _, ev := range execDetail.Variants {
+		assert.Equal(t, string(models.ExecutionVariantFailed), ev.Status)
+		assert.GreaterOrEqual(t, ev.Attempts, 1, "Expected at least 1 attempt performed")
+		assert.Equal(t, services.DefaultMaxAttempts, ev.Attempts, "Expected execution_variant to record all attempts performed")
+		assert.True(t, ev.ErrorMessage.Valid, "Expected error message persisted in failed execution_variant")
+		assert.Contains(t, ev.ErrorMessage.Val, "quantito api error evaluating clockwork_hgb")
+		assert.NotNil(t, ev.Params.Get(), "Expected snapshot params persisted in execution_variants")
+	}
+
+	// 5. Verify no signals were created for this execution or asset
+	execSignals, err := signalsRepo.FindByExecution(executions[0].ID)
+	require.NoError(t, err)
+	assert.Empty(t, execSignals, "No signals should be created when variant evaluation fails")
+
+	noDate := models.Nullable[time.Time]{}
+	persistedSignalsBTC, err := signalsRepo.FindByAsset("BTCUSDT", noDate, noDate)
+	require.NoError(t, err)
+	assert.Empty(t, persistedSignalsBTC, "No signals should be persisted for BTCUSDT when variants fail")
+}
+
 func TestIntegration_ExecuteExperiment_Inactive(t *testing.T) {
-	router, _, _, signalsRepo, mockSink, _ := setupIntegrationApp(t)
+	router, _, executionsRepo, signalsRepo, mockSink, dbHandler := setupIntegrationApp(t)
+	testdb.CleanSignalsTable(t, dbHandler)
 
 	// Execute Experiment #2 which is PAUSED in MySQL seed data
 	req := httptest.NewRequest(http.MethodPost, "/execute/2", nil)
@@ -120,6 +169,10 @@ func TestIntegration_ExecuteExperiment_Inactive(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rec.Code)
 	mockSink.AssertNotCalled(t, "Send", mock.Anything)
 
+	executions, err := executionsRepo.FindByExperiment(2, 10)
+	require.NoError(t, err)
+	assert.Empty(t, executions, "No execution or execution_variants should be created for inactive experiment")
+
 	noDate := models.Nullable[time.Time]{}
 	persistedSignals, err := signalsRepo.FindByAsset("BTC-USD", noDate, noDate)
 	require.NoError(t, err)
@@ -127,7 +180,8 @@ func TestIntegration_ExecuteExperiment_Inactive(t *testing.T) {
 }
 
 func TestIntegration_ExecuteExperiment_NotFound(t *testing.T) {
-	router, _, _, _, _, _ := setupIntegrationApp(t)
+	router, _, executionsRepo, _, mockSink, dbHandler := setupIntegrationApp(t)
+	testdb.CleanSignalsTable(t, dbHandler)
 
 	// Execute non-existent experiment
 	req := httptest.NewRequest(http.MethodPost, "/execute/999", nil)
@@ -137,6 +191,11 @@ func TestIntegration_ExecuteExperiment_NotFound(t *testing.T) {
 
 	assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
 	assert.Contains(t, rec.Body.String(), "error finding experiment 999")
+	mockSink.AssertNotCalled(t, "Send", mock.Anything)
+
+	executions, err := executionsRepo.FindByExperiment(999, 10)
+	require.NoError(t, err)
+	assert.Empty(t, executions, "No execution should be created for non-existent experiment")
 }
 
 func TestIntegration_ExecuteExperiment_InvalidIDParam(t *testing.T) {

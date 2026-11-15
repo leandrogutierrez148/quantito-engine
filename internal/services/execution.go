@@ -10,6 +10,9 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// DefaultMaxAttempts defines the default maximum number of evaluation attempts per variant.
+const DefaultMaxAttempts = 3
+
 // ExecutionService orchestrates experiment executions across their configured assets and competing strategy variants.
 type ExecutionService struct {
 	experimentsRepo  interfaces.IExperimentsRepository
@@ -94,17 +97,34 @@ func (e *ExecutionService) runExecution(experiment *models.Experiment, execution
 			continue
 		}
 
+		maxAttempts := e.getMaxAttempts(variant)
+		attempts := 0
 		start := time.Now()
-		evalErr := e.evaluateVariant(ev.ID, experiment, variant, snapshotParams)
+		var evalErr error
+		for attempts < maxAttempts {
+			attempts++
+			if attempts > 1 {
+				log.Warn().
+					Int("executionId", execution.ID).
+					Int("variantId", variant.ID).
+					Int("attempt", attempts).
+					Int("maxAttempts", maxAttempts).
+					Msg("Retrying variant evaluation")
+			}
+			evalErr = e.evaluateVariant(ev.ID, experiment, variant, snapshotParams)
+			if evalErr == nil {
+				break
+			}
+		}
 		durationMs := int(time.Since(start).Milliseconds())
 
 		if evalErr != nil {
-			log.Error().Err(evalErr).Int("executionId", execution.ID).Int("variantId", variant.ID).Msg("Error evaluating variant")
+			log.Error().Err(evalErr).Int("executionId", execution.ID).Int("variantId", variant.ID).Int("attempts", attempts).Msg("Error evaluating variant")
 			errStr := evalErr.Error()
-			_, _ = e.executionsRepo.UpdateExecutionVariant(ev.ID, string(models.ExecutionVariantFailed), durationMs, models.NotNull(errStr))
+			_, _ = e.executionsRepo.UpdateExecutionVariant(ev.ID, string(models.ExecutionVariantFailed), attempts, durationMs, models.NotNull(errStr))
 			failedCount++
 		} else {
-			_, _ = e.executionsRepo.UpdateExecutionVariant(ev.ID, string(models.ExecutionVariantCompleted), durationMs, models.Nullable[string]{})
+			_, _ = e.executionsRepo.UpdateExecutionVariant(ev.ID, string(models.ExecutionVariantCompleted), attempts, durationMs, models.Nullable[string]{})
 			completedCount++
 		}
 	}
@@ -136,6 +156,13 @@ func (e *ExecutionService) runExecution(experiment *models.Experiment, execution
 		Msg("Finished execution for experiment")
 
 	return nil
+}
+
+func (e *ExecutionService) getMaxAttempts(variant *models.Variant) int {
+	if variant != nil && variant.MaxAttempts >= 1 {
+		return variant.MaxAttempts
+	}
+	return DefaultMaxAttempts
 }
 
 func (e *ExecutionService) mergeVariantParams(experiment *models.Experiment, variant *models.Variant) map[string]any {

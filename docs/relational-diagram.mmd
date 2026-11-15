@@ -56,7 +56,8 @@ erDiagram
         int_unsigned asset_id FK "REFERENCES assets(id) ON DELETE RESTRICT"
         varchar name "Ej. AAPL - 50-Day SMA"
         json params "Parámetros actuales de la variante (mutables en el tiempo)"
-        decimal capital_allocation_pct "Porcentaje de capital (5,4), default 1.0000"
+        decimal max_capital_pct "Porcentaje máximo de capital (5,4), default 1.0000"
+        int_unsigned max_attempts "Máximo de intentos de evaluación, default 3"
         varchar status "ACTIVE, INACTIVE"
         text notes
         datetime created_at
@@ -83,6 +84,7 @@ erDiagram
         int_unsigned variant_id FK "REFERENCES variants(id) ON DELETE CASCADE (UK con execution_id)"
         json params "Snapshot inmutable de params al momento de la ejecución"
         varchar status "PENDING, RUNNING, COMPLETED, FAILED"
+        int_unsigned attempts "Cantidad de intentos realizados, default 0"
         int_unsigned duration_ms "Duración de evaluación en milisegundos"
         text error_message
         datetime started_at

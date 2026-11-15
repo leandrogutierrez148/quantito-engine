@@ -25,6 +25,7 @@ classDiagram
         +Execute(id int) error
         +ExecuteWithDetails(id int, triggerType string, triggeredBy string, asOfTime time.Time) error
         -runExecution(experiment *Experiment, execution *Execution) error
+        -getMaxAttempts(variant *Variant) int
         -mergeVariantParams(experiment *Experiment, variant *Variant) map[string]any
         -evaluateVariant(executionVariantID int, experiment *Experiment, variant *Variant, params map[string]any) error
     }
@@ -132,7 +133,7 @@ classDiagram
         +CreateExecution(experimentID int, triggerType string, triggeredBy string, asOfTime time.Time) *Execution, error
         +UpdateExecution(executionID int, status string, errorMessage Nullable~string~) *Execution, error
         +CreateExecutionVariant(executionID int, variantID int, params map[string]any) *ExecutionVariant, error
-        +UpdateExecutionVariant(id int, status string, durationMs int, errorMessage Nullable~string~) *ExecutionVariant, error
+        +UpdateExecutionVariant(id int, status string, attempts int, durationMs int, errorMessage Nullable~string~) *ExecutionVariant, error
         +FindByID(executionID int) *Execution, error
         +FindByExperiment(experimentID int, limit int) []*Execution, error
     }
@@ -141,7 +142,7 @@ classDiagram
         +CreateExecution(experimentID int, triggerType string, triggeredBy string, asOfTime time.Time) *Execution, error
         +UpdateExecution(executionID int, status string, errorMessage Nullable~string~) *Execution, error
         +CreateExecutionVariant(executionID int, variantID int, params map[string]any) *ExecutionVariant, error
-        +UpdateExecutionVariant(id int, status string, durationMs int, errorMessage Nullable~string~) *ExecutionVariant, error
+        +UpdateExecutionVariant(id int, status string, attempts int, durationMs int, errorMessage Nullable~string~) *ExecutionVariant, error
         +FindByID(executionID int) *Execution, error
         +FindByExperiment(experimentID int, limit int) []*Execution, error
     }
@@ -243,7 +244,8 @@ classDiagram
         +string Asset
         +string Name
         +JSONColumn Params
-        +float64 CapitalAllocationPct
+        +float64 MaxCapitalPct
+        +int MaxAttempts
         +string Status
         +Nullable~string~ Notes
         +string StrategyName
@@ -270,6 +272,7 @@ classDiagram
         +int VariantID
         +JSONColumn Params
         +string Status
+        +int Attempts
         +int DurationMs
         +Nullable~string~ ErrorMessage
         +Nullable~Time~ StartedAt

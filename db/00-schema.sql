@@ -87,7 +87,8 @@ CREATE TABLE `variants` (
   `asset_id` INT UNSIGNED NOT NULL,
   `name` VARCHAR(100) NOT NULL, -- e.g.: 'AAPL - 50-Day SMA', 'AAPL - Price Momentum'
   `params` JSON NOT NULL, -- Concrete runtime parameters provided to the strategy (mutable over time)
-  `capital_allocation_pct` DECIMAL(5, 4) NOT NULL DEFAULT 1.0000,
+  `max_capital_pct` DECIMAL(5, 4) NOT NULL DEFAULT 1.0000,
+  `max_attempts` INT UNSIGNED NOT NULL DEFAULT 3,
   `status` VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
   `notes` TEXT NULL,
   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -139,6 +140,7 @@ CREATE TABLE `execution_variants` (
   `variant_id` INT UNSIGNED NOT NULL,
   `params` JSON NOT NULL, -- Immutable snapshot of variant parameters at execution time
   `status` VARCHAR(20) NOT NULL DEFAULT 'PENDING', -- 'PENDING', 'RUNNING', 'COMPLETED', 'FAILED'
+  `attempts` INT UNSIGNED NOT NULL DEFAULT 0,
   `duration_ms` INT UNSIGNED NOT NULL DEFAULT 0,
   `error_message` TEXT NULL,
   `started_at` DATETIME NULL,
@@ -281,7 +283,8 @@ BEGIN
     a.`symbol` AS `asset`,
     v.`name`,
     v.`params`,
-    v.`capital_allocation_pct`,
+    v.`max_capital_pct`,
+    v.`max_attempts`,
     v.`status`,
     v.`notes`,
     st.`name` AS `strategy_name`,
@@ -419,6 +422,7 @@ BEGIN
     `variant_id`,
     `params`,
     `status`,
+    `attempts`,
     `duration_ms`,
     `error_message`,
     `started_at`,
@@ -436,6 +440,7 @@ DROP PROCEDURE IF EXISTS `sp_update_execution_variant`$$
 CREATE PROCEDURE `sp_update_execution_variant`(
   IN p_id INT UNSIGNED,
   IN p_status VARCHAR(20),
+  IN p_attempts INT UNSIGNED,
   IN p_duration_ms INT UNSIGNED,
   IN p_error_message TEXT
 )
@@ -443,6 +448,7 @@ BEGIN
   UPDATE `execution_variants`
   SET 
     `status` = p_status,
+    `attempts` = p_attempts,
     `duration_ms` = p_duration_ms,
     `error_message` = p_error_message,
     `completed_at` = NOW()
@@ -454,6 +460,7 @@ BEGIN
     `variant_id`,
     `params`,
     `status`,
+    `attempts`,
     `duration_ms`,
     `error_message`,
     `started_at`,
